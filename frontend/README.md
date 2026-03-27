@@ -1,44 +1,42 @@
 # Mestny Vzglyad Monorepo
 
-Starter repository for MVP development of:
-- mobile app (`React Native + Expo`)
-- web app (`React + Vite + TypeScript`)
-- shared package for common types/constants
+Стартовый фронтенд-репозиторий для разработки MVP:
+- мобильное приложение (`React Native + Expo`)
+- веб-приложение (`React + Vite + TypeScript`)
+- общий пакет для переиспользуемых типов и констант
 
-## Stack choice for this stage
+## Выбор стека на текущем этапе
 
-- **Mobile:** Expo (React Native) for the fastest iOS/Android launch.
-- **Web:** React + Vite for quick iteration and clean frontend architecture.
-- **Repo:** npm workspaces monorepo for shared code and synchronized setup.
+- **Mobile:** Expo (React Native) для максимально быстрого старта на iOS/Android.
+- **Web:** React + Vite для быстрой итерации и чистой архитектуры фронтенда.
+- **Repo:** монорепозиторий на npm workspaces для общей структуры и синхронной разработки.
 
-## Project structure
+## Структура проекта
 
 ```
-mestny-vzglyad/
+frontend/
   apps/
-    mobile/   # Expo app
-    web/      # React web app
-  packages/
-    shared/   # common types/constants
+    mobile/   # Expo-приложение
+    web/      # React web-приложение
 ```
 
-## Requirements
+## Требования
 
 - Node.js 20+
 - npm 10+
-- Xcode/Android Studio (for running mobile on simulators/devices)
+- Xcode/Android Studio (для запуска мобильного приложения на симуляторах/устройствах)
 
-## First install
+## Первая установка
 
-From repository root:
+Из корня `frontend`:
 
 ```bash
 npm install
 ```
 
-## Run apps
+## Запуск приложений
 
-From repository root:
+Из корня `frontend`:
 
 ```bash
 # web
@@ -47,12 +45,3 @@ npm run dev:web
 # mobile (Expo)
 npm run dev:mobile
 ```
-
-## Next preparation steps (without feature development)
-
-1. Add design system tokens to `packages/shared`.
-2. Prepare API client layer in both apps (without business endpoints).
-3. Add route skeletons:
-   - Web: public pages + user account + guide account.
-   - Mobile: auth, onboarding, map, routes, tours, profile.
-4. Add CI checks (lint, typecheck, build).
