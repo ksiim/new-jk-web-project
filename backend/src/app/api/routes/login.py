@@ -4,18 +4,29 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 
-from src.app.db.models.user import UserCreate
-import src.app.service.user as user_service
-from src.app.api.dependencies.common import SessionDep
+from src.app.api.dependencies.common import UserServiceDep
+from src.app.db.models.user import UserCreate, UserPublic
 from src.app.core.security import create_access_token
 from src.app.core.settings import get_project_settings
 from src.app.db.schemas import Token
 
 router = APIRouter(tags=["login"])
 
+
+@router.post("/register", response_model=UserPublic, status_code=201)
+async def register_user(
+    user_service: UserServiceDep,
+    user_in: UserCreate,
+) -> UserPublic:
+    """
+    Register a new user.
+    """
+    return await user_service.create_user(user_in)
+
+
 @router.post("/access-token")
 async def login_access_token(
-    session: SessionDep,
+    user_service: UserServiceDep,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> Token:
     """
@@ -24,7 +35,6 @@ async def login_access_token(
     project_settings = get_project_settings()
     if not (
         user := await user_service.authenticate(
-            session=session,
             email=form_data.username,
             password=form_data.password,
         )
@@ -36,7 +46,7 @@ async def login_access_token(
 
 @router.post("/super")
 async def create_super_user(
-    session: SessionDep,
+    user_service: UserServiceDep,
 ) -> Token:
     """
     Create superuser and get an access token for future requests
@@ -45,13 +55,9 @@ async def create_super_user(
     if not project_settings.SUPERUSER_EMAIL or not project_settings.SUPERUSER_PASSWORD:
         raise HTTPException(status_code=400, detail="Superuser credentials are not set")
     if not (
-        user := await user_service.get_user(
-            session=session,
-            email=project_settings.SUPERUSER_EMAIL,
-        )
+        user := await user_service.get_user(email=project_settings.SUPERUSER_EMAIL)
     ):
         user = await user_service.create_user(
-            session=session,
             user_in=UserCreate(
                 email=project_settings.SUPERUSER_EMAIL,
                 password=project_settings.SUPERUSER_PASSWORD,

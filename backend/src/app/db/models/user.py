@@ -1,11 +1,11 @@
 import datetime
 import uuid
-from typing import TYPE_CHECKING
 
 from pydantic import EmailStr, field_serializer
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, SQLModel
 
 from src.app.const import Variants
+from src.app.db.schemas import ListResponse
 
 
 class Role(Variants):
@@ -49,6 +49,4 @@ class UserPublic(UserBase):
     created_at: datetime.datetime
 
 
-class UsersPublic(SQLModel):
-    data: list[UserPublic]
-    count: int
+UsersPublic = ListResponse[UserPublic]

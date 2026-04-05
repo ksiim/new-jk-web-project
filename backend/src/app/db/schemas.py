@@ -1,7 +1,34 @@
 from enum import Enum
+from math import ceil
+from typing import Generic, TypeVar
 
 from fastapi import Form
+from pydantic import BaseModel
 from sqlmodel import Field, SQLModel
+
+T = TypeVar("T")
+
+
+class PaginationMeta(BaseModel):
+    page: int
+    limit: int
+    total: int
+    pages: int
+
+    @classmethod
+    def create(cls, page: int, limit: int, total: int) -> "PaginationMeta":
+        return cls(
+            page=page,
+            limit=limit,
+            total=total,
+            pages=ceil(total / limit) if total else 0,
+        )
+
+
+class ListResponse(BaseModel, Generic[T]):
+    data: list[T]
+    meta: PaginationMeta
+    error: None = None
 
 
 class Message(SQLModel):

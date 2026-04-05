@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.app.api.dependencies.common import SessionDep
+from src.app.api.dependencies.common import UserServiceDep
 from src.app.api.dependencies.pagination import PaginationDep
 from src.app.api.dependencies.users import (
     CurrentUser,
@@ -13,7 +13,6 @@ from src.app.db.models.user import (
     UserUpdate,
 )
 from src.app.db.schemas import Message
-from src.app.service import user as user_service
 
 router = APIRouter()
 
@@ -23,18 +22,17 @@ router = APIRouter()
     response_model=UsersPublic,
 )
 async def read_users(
-    session: SessionDep,
+    user_service: UserServiceDep,
     pagination: PaginationDep,
 ) -> UsersPublic:
     users = await user_service.get_users(
-        session=session,
-        skip=pagination.skip,
+        page=pagination.page,
         limit=pagination.limit,
     )
     return users
 
 
-@router.get("/me/profile", response_model=UserPublic)
+@router.get("/me", response_model=UserPublic)
 async def read_user_me(current_user: CurrentUser) -> UserPublic:
     """
     Retrieve information about the current authenticated user.
@@ -42,18 +40,16 @@ async def read_user_me(current_user: CurrentUser) -> UserPublic:
     return UserPublic.model_validate(current_user)
 
 
-@router.put("/me/profile", response_model=UserPublic)
+@router.put("/me", response_model=UserPublic)
 async def update_user_me(
-    session: SessionDep,
+    user_service: UserServiceDep,
     user_in: UserUpdate,
     current_user: CurrentUser,
 ) -> UserPublic:
     """
     Update the current authenticated user's information.
     """
-
     user = await user_service.update_user(
-        session=session,
         db_user=current_user,
         user_in=user_in,
     )
@@ -62,21 +58,19 @@ async def update_user_me(
 
 @router.delete("/me", response_model=Message)
 async def delete_user_me(
-    session: SessionDep,
+    user_service: UserServiceDep,
     current_user: CurrentUser,
 ) -> Message:
-    """`
+    """
     Delete the current authenticated user.
     """
-    if await user_service.delete_user(
-        session=session,
-        user_in=current_user,
-    ):
+    if await user_service.delete_user(current_user):
         return Message(message="User deleted successfully")
     raise HTTPException(
         status_code=500,
         detail="Failed to delete user",
     )
+
 
 @router.get(
     "/{user_id}",
@@ -97,7 +91,7 @@ async def read_user_by_id(
     response_model=UserPublic,
 )
 async def update_user(
-    session: SessionDep,
+    user_service: UserServiceDep,
     user_in: UserUpdate,
     db_user: UserOr404,
 ) -> UserPublic:
@@ -105,7 +99,6 @@ async def update_user(
     Update a user's information.
     """
     user = await user_service.update_user(
-        session=session,
         db_user=db_user,
         user_in=user_in,
     )
@@ -117,16 +110,13 @@ async def update_user(
     response_model=Message,
 )
 async def delete_user(
-    session: SessionDep,
+    user_service: UserServiceDep,
     user_in: UserOr404,
 ) -> Message:
     """
     Delete a user by their ID.
     """
-    if await user_service.delete_user(
-        session=session,
-        user_in=user_in,
-    ):
+    if await user_service.delete_user(user_in):
         return Message(message="User deleted successfully")
     raise HTTPException(
         status_code=500,

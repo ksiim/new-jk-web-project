@@ -7,17 +7,15 @@ from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from pydantic import ValidationError
 
-from src.app.api.dependencies.common import SessionDep, TokenDep
+from src.app.api.dependencies.common import TokenDep, UserRepositoryDep
 from src.app.core import security
 from src.app.core.settings import get_project_settings
-from src.app.crud import user as user_crud
 from src.app.db.models.user import Role, User
 from src.app.db.schemas import TokenPayload
-
 project_settings = get_project_settings()
 
 async def get_current_user(
-    session: SessionDep,
+    user_repository: UserRepositoryDep,
     token: TokenDep,
 ) -> User:
     try:
@@ -32,7 +30,7 @@ async def get_current_user(
             status_code=403,
             detail="Could not validate credentials",
         )
-    user = await session.get(User, token_data.sub)
+    user = await user_repository.get_by_id(token_data.sub)
     if not user:
         raise HTTPException(
             status_code=404,
@@ -42,7 +40,7 @@ async def get_current_user(
 
 
 async def get_optional_user(
-    session: SessionDep,
+    user_repository: UserRepositoryDep,
     token: str | None = Depends(
         OAuth2PasswordBearer(
             tokenUrl="login",
@@ -61,17 +59,14 @@ async def get_optional_user(
         token_data = TokenPayload(**payload)
     except (ValidationError):
         return None
-    return await session.get(User, token_data.sub)
+    return await user_repository.get_by_id(token_data.sub)
 
 
 async def get_user_or_404(
-    session: SessionDep,
+    user_repository: UserRepositoryDep,
     user_id: uuid.UUID,
 ) -> User:
-    user = await user_crud.get_user(
-        session=session,
-        id=user_id,
-    )
+    user = await user_repository.get_user(id=user_id)
     if not user:
         raise HTTPException(
             status_code=404,
