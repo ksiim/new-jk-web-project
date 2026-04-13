@@ -12,6 +12,7 @@ from src.app.core import security
 from src.app.core.settings import get_project_settings
 from src.app.db.models.user import Role, User
 from src.app.db.schemas import TokenPayload
+
 project_settings = get_project_settings()
 
 async def get_current_user(

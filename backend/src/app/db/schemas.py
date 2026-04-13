@@ -25,9 +25,15 @@ class PaginationMeta(BaseModel):
         )
 
 
-class ListResponse(BaseModel, Generic[T]):
+class ListResponse(BaseModel, Generic[T]):  # noqa: UP046
     data: list[T]
     meta: PaginationMeta
+    error: None = None
+
+
+class DetailResponse(BaseModel, Generic[T]):  # noqa: UP046
+    data: T
+    meta: dict = {}
     error: None = None
 
 

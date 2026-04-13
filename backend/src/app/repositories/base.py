@@ -8,7 +8,7 @@ from sqlmodel import SQLModel
 ModelT = TypeVar("ModelT", bound=SQLModel)
 
 
-class BaseRepository(Generic[ModelT]):
+class BaseRepository(Generic[ModelT]):  # noqa: UP046
     model: type[ModelT]
 
     def __init__(self, session: AsyncSession) -> None:
