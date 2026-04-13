@@ -1,91 +1,223 @@
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { RootStackParamList } from '../app/navigation/RootNavigator';
+import type { MainStackParamList } from '../navigation/MainNavigator';
+import { nearbyItems, routes } from '../entities/routes/mockData';
+import { colors } from '../shared/theme/colors';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
-
-export function HomeScreen({ navigation }: Props) {
+export function HomeScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
+  const activeRoute = routes.find((r) => r.status === 'active');
+  const plannedRoutes = routes.filter((r) => r.status === 'planned');
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Mestny Vzglyad</Text>
-      <Text style={styles.subtitle}>Mobile MVP skeleton</Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.title}>Добрый день, Имя!</Text>
+      <Text style={styles.subtitle}>Куда отправимся сегодня?</Text>
 
-      <View style={styles.grid}>
-        <Pressable style={styles.card} onPress={() => navigation.navigate('Auth')}>
-          <Text style={styles.cardTitle}>Auth</Text>
-          <Text style={styles.cardText}>Login / Register</Text>
-        </Pressable>
-        <Pressable
-          style={styles.card}
-          onPress={() => navigation.navigate('Onboarding')}
-        >
-          <Text style={styles.cardTitle}>Onboarding</Text>
-          <Text style={styles.cardText}>Interests / limitations</Text>
-        </Pressable>
-        <Pressable style={styles.card} onPress={() => navigation.navigate('Map')}>
-          <Text style={styles.cardTitle}>Map</Text>
-          <Text style={styles.cardText}>POE points</Text>
-        </Pressable>
-        <Pressable style={styles.card} onPress={() => navigation.navigate('Routes')}>
-          <Text style={styles.cardTitle}>Routes</Text>
-          <Text style={styles.cardText}>Generate / history</Text>
-        </Pressable>
-        <Pressable style={styles.card} onPress={() => navigation.navigate('Tours')}>
-          <Text style={styles.cardTitle}>Tours</Text>
-          <Text style={styles.cardText}>Catalog</Text>
-        </Pressable>
-        <Pressable
-          style={styles.card}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <Text style={styles.cardTitle}>Profile</Text>
-          <Text style={styles.cardText}>User / Guide</Text>
-        </Pressable>
+      <View style={styles.filtersRow}>
+        <View style={styles.filterChip}><Text style={styles.filterText}>2 часа</Text></View>
+        <View style={styles.filterChip}><Text style={styles.filterText}>искусство</Text></View>
+        <View style={styles.filterChip}><Text style={styles.filterText}>рядом</Text></View>
       </View>
-    </View>
+
+      <Pressable style={styles.generateButton}>
+        <Text style={styles.generateButtonText}>Сгенерировать маршрут</Text>
+      </Pressable>
+
+      <Text style={styles.sectionTitle}>Быстрые сценарии</Text>
+      <View style={styles.quickGrid}>
+        <View style={styles.quickCard}><Text style={styles.quickText}>Кофе рядом</Text></View>
+        <View style={styles.quickCard}><Text style={styles.quickText}>Арт-прогулка</Text></View>
+        <View style={styles.quickCard}><Text style={styles.quickText}>Спокойный маршрут</Text></View>
+        <View style={styles.quickCard}><Text style={styles.quickText}>Еще →</Text></View>
+      </View>
+
+      <Text style={styles.sectionTitle}>Для вас</Text>
+
+      {activeRoute && (
+        <View style={styles.routeCard}>
+          <Text style={[styles.statusDot, { color: '#8FD588' }]}>● Сейчас активен</Text>
+          <Text style={styles.routeTitle}>{activeRoute.title}</Text>
+          <Text style={styles.routeMeta}>{activeRoute.distanceKm} км • {activeRoute.durationHours} часа</Text>
+          <Pressable style={styles.outlineButton} onPress={() => navigation.navigate('ActiveRoute')}>
+            <Text style={styles.outlineText}>Продолжить</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {plannedRoutes.map((route) => (
+        <View key={route.id} style={styles.routeCard}>
+          <Text style={[styles.statusDot, { color: '#D596D5' }]}>● В планах</Text>
+          <Text style={styles.routeTitle}>{route.title}</Text>
+          <Text style={styles.routeMeta}>{route.distanceKm} км • {route.pace}</Text>
+          <Pressable style={styles.outlineButton}>
+            <Text style={styles.outlineText}>Начать</Text>
+          </Pressable>
+        </View>
+      ))}
+
+      <Text style={styles.sectionTitle}>Рядом сейчас</Text>
+      <View style={styles.nearbyRow}>
+        {nearbyItems.map((item) => (
+          <View key={item.id} style={styles.nearbyCard}>
+            <View style={styles.imageStub}>
+              <Text style={styles.ratingText}>{item.rating} ({item.votes})</Text>
+            </View>
+            <Text style={styles.nearbyTitle}>{item.title}</Text>
+            <Text style={styles.nearbyMeta}>{item.schedule}</Text>
+            <Text style={styles.price}>{item.price}</Text>
+            <Pressable style={styles.outlineButton}><Text style={styles.outlineText}>Подробнее</Text></Pressable>
+          </View>
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#f7f8fa',
+    backgroundColor: colors.background,
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 20,
   },
   title: {
-    fontSize: 28,
+    fontSize: 46,
     fontWeight: '800',
-    color: '#111827',
+    color: colors.textPrimary,
   },
   subtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#4b5563',
+    marginTop: 14,
+    fontSize: 26,
+    color: colors.textPrimary,
+    fontWeight: '700',
   },
-  grid: {
-    marginTop: 20,
+  filtersRow: {
+    marginTop: 14,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
   },
-  card: {
-    width: '48%',
-    backgroundColor: '#ffffff',
+  filterChip: {
+    backgroundColor: colors.white,
     borderRadius: 12,
-    padding: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: colors.line,
+    marginRight: 10,
+    marginBottom: 10,
   },
-  cardTitle: {
-    fontSize: 16,
+  filterText: {
+    color: colors.textMuted,
+  },
+  generateButton: {
+    alignSelf: 'center',
+    marginTop: 10,
+    backgroundColor: colors.accentButton,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 30,
+  },
+  generateButtonText: {
+    color: colors.white,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
   },
-  cardText: {
+  sectionTitle: {
+    marginTop: 20,
+    marginBottom: 12,
+    color: colors.textPrimary,
+    fontSize: 38,
+    fontWeight: '800',
+  },
+  quickGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  quickCard: {
+    width: '48%',
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    marginRight: '2%',
+    marginBottom: 10,
+  },
+  quickText: {
+    fontSize: 16,
+    color: colors.textMuted,
+  },
+  routeCard: {
     marginTop: 6,
+  },
+  statusDot: {
     fontSize: 12,
-    color: '#6b7280',
+  },
+  routeTitle: {
+    marginTop: 4,
+    fontSize: 36,
+    color: colors.textPrimary,
+    fontWeight: '700',
+  },
+  routeMeta: {
+    marginTop: 2,
+    color: colors.textMuted,
+    fontSize: 20,
+  },
+  outlineButton: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: colors.textPrimary,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+  },
+  outlineText: {
+    fontSize: 16,
+    color: colors.textPrimary,
+    fontWeight: '700',
+  },
+  nearbyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  nearbyCard: {
+    width: '48%',
+  },
+  imageStub: {
+    height: 70,
+    borderRadius: 6,
+    backgroundColor: '#5C6470',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    padding: 6,
+  },
+  ratingText: {
+    color: colors.white,
+    fontWeight: '700',
+  },
+  nearbyTitle: {
+    marginTop: 6,
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  nearbyMeta: {
+    marginTop: 3,
+    color: colors.textMuted,
+  },
+  price: {
+    marginTop: 6,
+    color: colors.textPrimary,
+    fontWeight: '700',
+    fontSize: 28,
   },
 });
 

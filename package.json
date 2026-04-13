@@ -1,0 +1,13 @@
+{
+  "name": "new-jk-web-project",
+  "private": true,
+  "description": "Корневые npm-скрипты проксируют в папку фронтенда",
+  "scripts": {
+    "install:frontend": "npm install --prefix frontend",
+    "dev:web": "npm run dev:web --prefix frontend",
+    "dev:mobile": "npm --prefix frontend/apps/mobile run start",
+    "dev:mobile:web": "npm --prefix frontend/apps/mobile run web",
+    "build:web": "npm run build:web --prefix frontend",
+    "lint:web": "npm run lint:web --prefix frontend"
+  }
+}
