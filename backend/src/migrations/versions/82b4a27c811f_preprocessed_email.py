@@ -5,18 +5,17 @@ Revises: dad83160d3fc
 Create Date: 2026-02-25 17:38:58.254307
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 import sqlmodel
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '82b4a27c811f'
-down_revision: Union[str, Sequence[str], None] = 'dad83160d3fc'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = 'dad83160d3fc'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -33,7 +32,7 @@ def upgrade() -> None:
     sa.Column('emotional_color', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('question', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('id', sa.Uuid(), nullable=False),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
     )
     # ### end Alembic commands ###
 

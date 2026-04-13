@@ -32,7 +32,7 @@ class User(UserBase, table=True):
 
 class UserCreate(UserBase):
     password: str
-    
+
     @field_serializer("email")
     def serialize_email(self, email: EmailStr) -> str:
         return email.lower()

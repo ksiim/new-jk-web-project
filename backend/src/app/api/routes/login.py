@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 
 from src.app.api.dependencies.common import UserServiceDep
-from src.app.db.models.user import UserCreate, UserPublic
 from src.app.core.security import create_access_token
 from src.app.core.settings import get_project_settings
+from src.app.db.models.user import UserCreate, UserPublic
 from src.app.db.schemas import Token
 
 router = APIRouter(tags=["login"])
@@ -65,7 +65,7 @@ async def create_super_user(
                 surname="surname",
                 patronymic="patronymic",
                 date_of_birth=datetime.date(2000, 1, 1),
-            )
+            ),
         )
     access_token_expires = datetime.timedelta(minutes=project_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return Token(access_token=create_access_token(str(user.id), access_token_expires))
