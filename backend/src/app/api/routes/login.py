@@ -1,0 +1,71 @@
+import datetime
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
+
+from src.app.api.dependencies.common import UserServiceDep
+from src.app.core.security import create_access_token
+from src.app.core.settings import get_project_settings
+from src.app.db.models.user import UserCreate, UserPublic
+from src.app.db.schemas import Token
+
+router = APIRouter(tags=["login"])
+
+
+@router.post("/register", response_model=UserPublic, status_code=201)
+async def register_user(
+    user_service: UserServiceDep,
+    user_in: UserCreate,
+) -> UserPublic:
+    """
+    Register a new user.
+    """
+    return await user_service.create_user(user_in)
+
+
+@router.post("/access-token")
+async def login_access_token(
+    user_service: UserServiceDep,
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+) -> Token:
+    """
+    OAuth2 compatible token login, get an access token for future requests
+    """
+    project_settings = get_project_settings()
+    if not (
+        user := await user_service.authenticate(
+            email=form_data.username,
+            password=form_data.password,
+        )
+    ):
+        raise HTTPException(status_code=400, detail="Incorrect email or password")
+    access_token_expires = datetime.timedelta(minutes=project_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    return Token(access_token=create_access_token(str(user.id), access_token_expires))
+
+
+@router.post("/super")
+async def create_super_user(
+    user_service: UserServiceDep,
+) -> Token:
+    """
+    Create superuser and get an access token for future requests
+    """
+    project_settings = get_project_settings()
+    if not project_settings.SUPERUSER_EMAIL or not project_settings.SUPERUSER_PASSWORD:
+        raise HTTPException(status_code=400, detail="Superuser credentials are not set")
+    if not (
+        user := await user_service.get_user(email=project_settings.SUPERUSER_EMAIL)
+    ):
+        user = await user_service.create_user(
+            user_in=UserCreate(
+                email=project_settings.SUPERUSER_EMAIL,
+                password=project_settings.SUPERUSER_PASSWORD,
+                name="Superuser",
+                surname="surname",
+                patronymic="patronymic",
+                date_of_birth=datetime.date(2000, 1, 1),
+            ),
+        )
+    access_token_expires = datetime.timedelta(minutes=project_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    return Token(access_token=create_access_token(str(user.id), access_token_expires))
