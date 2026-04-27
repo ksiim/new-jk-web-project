@@ -1,10 +1,13 @@
 from fastapi import APIRouter
 
 from src.app.api.routes import (
+    bookings,
     healthcheck,
     login,
     poe,
+    reviews,
     routes,
+    tours,
     users,
 )
 
@@ -31,4 +34,13 @@ api_router.include_router(
 )
 api_router.include_router(
     routes.router, tags=["routes"], prefix="/routes",
+)
+api_router.include_router(
+    tours.router, tags=["tours"], prefix="/tours",
+)
+api_router.include_router(
+    bookings.router, tags=["bookings"], prefix="/bookings",
+)
+api_router.include_router(
+    reviews.router, tags=["reviews"],
 )
