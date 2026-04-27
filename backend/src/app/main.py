@@ -7,8 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.app.api.main import api_router
 from src.app.core.settings import get_project_settings
+from src.app.utils.logging import RequestLoggingMiddleware, configure_logging
 
 project_settings = get_project_settings()
+configure_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -28,5 +30,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(api_router, prefix=project_settings.API_V1_STR)
