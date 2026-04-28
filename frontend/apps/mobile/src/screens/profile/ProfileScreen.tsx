@@ -28,12 +28,12 @@ export function ProfileScreen() {
   const logout = useLogout();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const composedName =
-    localFullName ??
-    (user ? `${user.surname ?? ''} ${user.name ?? ''}`.trim() : '');
+  const serverFullName = user ? `${user.surname ?? ''} ${user.name ?? ''}`.trim() : '';
+  const composedName = localFullName ?? serverFullName;
   const displayName = composedName || 'Фамилия Имя';
   const displayEmail = user?.email ?? 'example@email.com';
   const displayPhone = phone ?? '+7 (999) 888 - 77 - 66';
+  const hasLocalProfileData = Boolean(localFullName || phone || avatarUri);
 
   const handleLogout = () => {
     setConfirmOpen(false);
@@ -55,9 +55,19 @@ export function ProfileScreen() {
         <Text style={styles.pageTitle}>Профиль</Text>
 
         <View style={styles.userRow}>
-          <Avatar uri={avatarUri} name={displayName} size={86} />
+          <Avatar
+            uri={avatarUri}
+            name={displayName}
+            width={116}
+            height={136}
+            radius={14}
+            shape="rounded"
+          />
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{displayName}</Text>
+            {hasLocalProfileData ? (
+              <Text style={styles.localHint}>Некоторые изменения сохранены локально</Text>
+            ) : null}
             <Text style={styles.userMeta}>{displayEmail}</Text>
             <Text style={styles.userMeta}>{displayPhone}</Text>
             <Pressable
@@ -195,7 +205,7 @@ const styles = StyleSheet.create({
   },
   userRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 14,
     marginBottom: 18,
   },
@@ -211,6 +221,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textPrimary,
     marginTop: 2,
+  },
+  localHint: {
+    marginTop: 2,
+    fontSize: 11,
+    color: colors.textMuted,
   },
   editBtn: {
     alignSelf: 'flex-start',

@@ -50,7 +50,7 @@ const initial = {
   budgetMin: 0 as number | null,
   budgetMax: 12000 as number | null,
   durationMinHours: 1 as number | null,
-  durationMaxHours: 8 as number | null,
+  durationMaxHours: 12 as number | null,
 };
 
 export const usePreferencesStore = create<PreferencesState>()(

@@ -6,6 +6,7 @@ import type { RootStackParamList } from '../../navigation/RootNavigator';
 import { selectIsAuthenticated, useAuthStore } from '../../entities/auth/authStore';
 import { usePreferencesStore } from '../../entities/preferences/preferencesStore';
 import { LogoMark } from '../../features/auth/components/LogoMark';
+import { useMe } from '../../shared/auth/hooks';
 import { colors } from '../../shared/theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Splash'>;
@@ -18,8 +19,12 @@ export function SplashScreen({ navigation }: Props) {
   const isAuthenticated = useAuthStore(selectIsAuthenticated);
   const hasSeenWelcome = useAuthStore((s) => s.hasSeenWelcome);
   const onboardingCompleted = usePreferencesStore((s) => s.completed);
+  const me = useMe();
 
-  const ready = authHydrated && prefsHydrated;
+  const ready =
+    authHydrated &&
+    prefsHydrated &&
+    (!isAuthenticated || me.isSuccess || me.isError);
 
   useEffect(() => {
     if (!ready) return;

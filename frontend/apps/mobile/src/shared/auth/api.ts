@@ -22,7 +22,7 @@ export type RegisterPayload = {
 
 export async function loginRequest(payload: LoginPayload): Promise<TokenResponse> {
   const body = new URLSearchParams();
-  body.set('username', payload.email);
+  body.set('username', payload.email.trim());
   body.set('password', payload.password);
   const { data } = await http.post<TokenResponse>('/login/access-token', body.toString(), {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

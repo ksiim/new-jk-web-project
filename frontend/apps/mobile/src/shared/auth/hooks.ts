@@ -22,13 +22,18 @@ export function useMe() {
 
 export function useLogin() {
   const setToken = useAuthStore((s) => s.setToken);
+  const setUser = useAuthStore((s) => s.setUser);
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (payload: LoginPayload) => loginRequest(payload),
     onSuccess: async (data) => {
       setToken(data.access_token);
-      await queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      const user = await queryClient.fetchQuery({
+        queryKey: ['auth', 'me'],
+        queryFn: fetchMe,
+      });
+      setUser(user);
     },
   });
 }

@@ -4,16 +4,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { RootStackParamList } from '../../navigation/RootNavigator';
 import { AuthPrimaryButton } from '../../features/auth/components/AuthPrimaryButton';
@@ -52,10 +43,12 @@ export function LoginScreen({ navigation }: Props) {
   const login = useLogin();
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { control, handleSubmit, setError, clearErrors } = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
-  });
+  const { control, handleSubmit, setError, clearErrors, formState } =
+    useForm<LoginFormValues>({
+      resolver: zodResolver(loginSchema),
+      mode: 'onChange',
+      defaultValues: { email: '', password: '' },
+    });
 
   const emailValue = useWatch({ control, name: 'email' });
   const passwordValue = useWatch({ control, name: 'password' });
@@ -115,14 +108,7 @@ export function LoginScreen({ navigation }: Props) {
           autoCapitalize="none"
         />
 
-        <Pressable
-          onPress={() =>
-            Alert.alert(
-              'Скоро',
-              'Восстановление пароля появится в следующей итерации.',
-            )
-          }
-        >
+        <Pressable onPress={() => navigation.navigate('ForgotPassword')}>
           <Text style={styles.forgot}>Забыли пароль?</Text>
         </Pressable>
 
@@ -142,6 +128,7 @@ export function LoginScreen({ navigation }: Props) {
           title="Войти"
           onPress={onSubmit}
           loading={login.isPending}
+          disabled={!formState.isValid}
         />
 
         <Text style={styles.footer}>

@@ -79,6 +79,12 @@ export function ProfileChangePasswordScreen() {
         <ScreenHeader />
 
         <Text style={styles.title}>Изменить пароль</Text>
+        <View style={styles.infoBox}>
+          <Text style={styles.infoText}>
+            Смена пароля готова на уровне интерфейса. Подключение к backend API в
+            процессе.
+          </Text>
+        </View>
 
         <PasswordField
           label="Текущий пароль"
@@ -146,6 +152,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.textPrimary,
     marginBottom: 24,
+  },
+  infoBox: {
+    marginTop: -10,
+    marginBottom: 16,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: colors.backgroundMuted,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  infoText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
   },
   field: {
     marginBottom: 18,

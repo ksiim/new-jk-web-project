@@ -9,5 +9,8 @@
     "dev:mobile:web": "npm --prefix frontend/apps/mobile run web",
     "build:web": "npm run build:web --prefix frontend",
     "lint:web": "npm run lint:web --prefix frontend"
+  },
+  "dependencies": {
+    "expo-image-picker": "^55.0.19"
   }
 }

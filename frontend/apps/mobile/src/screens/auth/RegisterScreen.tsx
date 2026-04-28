@@ -1,8 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useForm } from 'react-hook-form';
+import axios from 'axios';
+import { useEffect, useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -10,6 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 
 import type { RootStackParamList } from '../../navigation/RootNavigator';
 import { AuthPrimaryButton } from '../../features/auth/components/AuthPrimaryButton';
@@ -30,12 +32,29 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 // убрать и не передавать его в payload.
 const DATE_OF_BIRTH_FALLBACK = '2000-01-01';
 
+function translateRegisterError(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    if (!error.response) {
+      return 'Нет соединения с сервером. Проверьте интернет.';
+    }
+    if (error.response.status === 409) {
+      return 'Пользователь с таким email уже существует';
+    }
+    if (error.response.status >= 500) {
+      return 'Сервер временно недоступен. Попробуйте позже.';
+    }
+  }
+  return extractApiError(error);
+}
+
 export function RegisterScreen({ navigation }: Props) {
   const register = useRegister();
   const login = useLogin();
   const submitting = register.isPending || login.isPending;
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const { control, handleSubmit } = useForm<RegisterFormValues>({
+  const { control, handleSubmit, setError, clearErrors, formState } =
+    useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     mode: 'onChange',
     defaultValues: {
@@ -47,7 +66,29 @@ export function RegisterScreen({ navigation }: Props) {
     },
   });
 
+  const fullNameValue = useWatch({ control, name: 'fullName' });
+  const phoneValue = useWatch({ control, name: 'phone' });
+  const emailValue = useWatch({ control, name: 'email' });
+  const passwordValue = useWatch({ control, name: 'password' });
+  const confirmPasswordValue = useWatch({ control, name: 'confirmPassword' });
+
+  useEffect(() => {
+    if (formError) {
+      setFormError(null);
+      clearErrors(['fullName', 'phone', 'email', 'password', 'confirmPassword']);
+    }
+  }, [
+    fullNameValue,
+    phoneValue,
+    emailValue,
+    passwordValue,
+    confirmPasswordValue,
+    formError,
+    clearErrors,
+  ]);
+
   const onSubmit = handleSubmit(async (values) => {
+    setFormError(null);
     const email = values.email.trim();
     const password = values.password;
     const { surname, name } = splitFullName(values.fullName);
@@ -64,7 +105,11 @@ export function RegisterScreen({ navigation }: Props) {
       await login.mutateAsync({ email, password });
       navigation.reset({ index: 0, routes: [{ name: 'OnboardingInterests' }] });
     } catch (error) {
-      Alert.alert('Не удалось зарегистрироваться', extractApiError(error));
+      const message = translateRegisterError(error);
+      setFormError(message);
+      setError('email', { type: 'server' });
+      setError('password', { type: 'server' });
+      setError('confirmPassword', { type: 'server' });
     }
   });
 
@@ -113,10 +158,23 @@ export function RegisterScreen({ navigation }: Props) {
           autoCapitalize="none"
         />
 
+        {formError ? (
+          <View style={styles.errorBox}>
+            <Feather
+              name="alert-circle"
+              size={16}
+              color={colors.errorText}
+              style={styles.errorIcon}
+            />
+            <Text style={styles.errorText}>{formError}</Text>
+          </View>
+        ) : null}
+
         <AuthPrimaryButton
           title="Зарегистрироваться"
           onPress={onSubmit}
           loading={submitting}
+          disabled={!formState.isValid}
         />
 
         <Text style={styles.footer}>
@@ -155,6 +213,27 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
     color: colors.textMuted,
+  },
+  errorBox: {
+    marginTop: 10,
+    backgroundColor: colors.errorBg,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.errorBorder,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  errorIcon: {
+    marginTop: 1,
+  },
+  errorText: {
+    flex: 1,
+    color: colors.errorText,
+    fontSize: 13,
+    lineHeight: 18,
   },
   link: {
     fontWeight: '700',

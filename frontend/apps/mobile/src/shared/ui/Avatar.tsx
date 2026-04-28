@@ -6,6 +6,10 @@ type Props = {
   uri?: string | null;
   name?: string | null;
   size?: number;
+  width?: number;
+  height?: number;
+  radius?: number;
+  shape?: 'circle' | 'rounded';
 };
 
 function initials(name?: string | null): string {
@@ -19,20 +23,31 @@ function initials(name?: string | null): string {
   return parts.map((part) => part.charAt(0).toUpperCase()).join('');
 }
 
-export function Avatar({ uri, name, size = 80 }: Props) {
+export function Avatar({
+  uri,
+  name,
+  size = 80,
+  width,
+  height,
+  radius,
+  shape = 'circle',
+}: Props) {
+  const resolvedWidth = width ?? size;
+  const resolvedHeight = height ?? size;
+  const resolvedRadius = radius ?? (shape === 'circle' ? resolvedWidth / 2 : 12);
   const style = {
-    width: size,
-    height: size,
-    borderRadius: size / 2,
+    width: resolvedWidth,
+    height: resolvedHeight,
+    borderRadius: resolvedRadius,
   } as const;
 
   if (uri) {
-    return <Image source={{ uri }} style={[styles.image, style]} />;
+    return <Image source={{ uri }} style={[styles.image, style]} resizeMode="cover" />;
   }
 
   return (
     <View style={[styles.placeholder, style]}>
-      <Text style={[styles.initials, { fontSize: size * 0.38 }]}>
+      <Text style={[styles.initials, { fontSize: Math.min(resolvedWidth, resolvedHeight) * 0.38 }]}>
         {initials(name)}
       </Text>
     </View>

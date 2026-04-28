@@ -15,7 +15,14 @@ import { ProfileReviewsScreen } from '../screens/profile/ProfileReviewsScreen';
 import { ProfileReservationsScreen } from '../screens/profile/ProfileReservationsScreen';
 import { RoutesScreen } from '../screens/RoutesScreen';
 import { ToursScreen } from '../screens/ToursScreen';
+import { TourDetailScreen } from '../screens/tours/TourDetailScreen';
+import { TourBookingScreen } from '../screens/tours/TourBookingScreen';
+import { TourDeferredScreen } from '../screens/tours/TourDeferredScreen';
+import { TourReviewsScreen } from '../screens/tours/TourReviewsScreen';
+import { GuideProfileScreen } from '../screens/tours/GuideProfileScreen';
+import { BookingDetailScreen } from '../screens/tours/BookingDetailScreen';
 import { MapFiltersScreen } from '../screens/map/MapFiltersScreen';
+import { PoeDetailScreen } from '../screens/map/PoeDetailScreen';
 import { ActiveRouteScreen } from '../screens/routes/ActiveRouteScreen';
 import { colors } from '../shared/theme/colors';
 
@@ -30,6 +37,13 @@ export type MainTabParamList = {
 export type MainStackParamList = {
   Tabs: undefined;
   MapFilters: undefined;
+  PoeDetail: { poeId: string };
+  TourDetail: { tourId: string; bookingId?: string };
+  TourBooking: { tourId: string };
+  TourDeferred: { tourId: string };
+  TourReviews: { tourId: string };
+  GuideProfile: { tourId: string };
+  BookingDetail: { bookingId: string };
   ActiveRoute: undefined;
   ProfileEdit: undefined;
   ProfileChangePassword: undefined;
@@ -50,16 +64,20 @@ function TabsNavigator() {
       initialRouteName="Home"
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: colors.textPrimary,
+        tabBarActiveTintColor: colors.white,
         tabBarInactiveTintColor: colors.textPrimary,
         tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
         tabBarStyle: {
-          height: 72,
+          height: 74,
           backgroundColor: colors.white,
           borderTopColor: colors.line,
           borderTopWidth: 1,
-          paddingBottom: 6,
-          paddingTop: 6,
+          paddingBottom: 7,
+          paddingTop: 7,
+        },
+        tabBarActiveBackgroundColor: colors.accentButton,
+        tabBarItemStyle: {
+          borderRadius: 0,
         },
         tabBarIcon: ({ focused, color, size }) => {
           const iconMap: Record<keyof MainTabParamList, keyof typeof Ionicons.glyphMap> = {
@@ -69,18 +87,6 @@ function TabsNavigator() {
             Tours: 'ribbon-outline',
             Profile: 'person-outline',
           };
-
-          if (route.name === 'Home' && focused) {
-            return (
-              <Ionicons
-                name={iconMap[route.name]}
-                size={size}
-                color={colors.white}
-                style={{ backgroundColor: colors.accentButton, borderRadius: 16, padding: 6 }}
-              />
-            );
-          }
-
           return <Ionicons name={iconMap[route.name]} size={size} color={color} />;
         },
       })}
@@ -108,6 +114,13 @@ export function MainNavigator() {
           headerStyle: { backgroundColor: colors.background },
         }}
       />
+      <Stack.Screen name="PoeDetail" component={PoeDetailScreen} />
+      <Stack.Screen name="TourDetail" component={TourDetailScreen} />
+      <Stack.Screen name="TourBooking" component={TourBookingScreen} />
+      <Stack.Screen name="TourDeferred" component={TourDeferredScreen} />
+      <Stack.Screen name="TourReviews" component={TourReviewsScreen} />
+      <Stack.Screen name="GuideProfile" component={GuideProfileScreen} />
+      <Stack.Screen name="BookingDetail" component={BookingDetailScreen} />
       <Stack.Screen name="ActiveRoute" component={ActiveRouteScreen} />
       <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
       <Stack.Screen
