@@ -1,16 +1,34 @@
+import datetime
+import uuid
+
 from fastapi import HTTPException
 
-from src.app.db.models.poe import Poe
+from src.app.db.models.poe import Location, Poe
 from src.app.db.models.route import (
     Pace,
     Route,
+    RouteDetailPublic,
     RouteGeneratedPublic,
     RouteGenerateRequest,
     RouteGenerateResponse,
+    RouteJourneyPublic,
+    RouteJourneyResponse,
+    RouteListItemPublic,
+    RouteManualUpdate,
+    RoutePoeShort,
     RoutePoint,
+    RoutePointDetailPublic,
+    RoutePointEdit,
     RoutePointPublic,
+    RouteProgressUpdate,
+    RouteResponse,
+    RouteSavedPublic,
+    RouteSaveResponse,
+    RouteSource,
+    RoutesPublic,
+    RouteStatus,
 )
-from src.app.db.schemas import DetailResponse
+from src.app.db.schemas import DetailResponse, PaginationMeta
 from src.app.repositories.poe import PoeRepository
 from src.app.repositories.route import RouteRepository
 from src.app.service.base import BaseService
@@ -28,7 +46,12 @@ class RouteService(BaseService[RouteRepository]):
         super().__init__(repository)
         self.poe_repository = poe_repository
 
-    async def generate_route(self, request: RouteGenerateRequest) -> RouteGenerateResponse:
+    async def generate_route(
+        self,
+        request: RouteGenerateRequest,
+        *,
+        user_id: uuid.UUID,
+    ) -> RouteGenerateResponse:
         candidates = await self.poe_repository.list_candidates(
             city_id=request.city_id,
             wheelchair_accessible=True if request.accessibility.wheelchair_required else None,
@@ -40,6 +63,7 @@ class RouteService(BaseService[RouteRepository]):
         route_distance = self._route_distance(request, selected)
         accessibility_score = self._accessibility_score(selected)
         route = Route(
+            user_id=user_id,
             title=self._build_title(request, selected),
             description=f"Маршрут на {request.duration_minutes // 60 or 1} ч. по городу",
             city_id=request.city_id,
@@ -82,6 +106,215 @@ class RouteService(BaseService[RouteRepository]):
         )
         await self.repository.create_with_points(route, points)
         return DetailResponse(data=route_public)
+
+    async def get_routes(
+        self,
+        *,
+        user_id: uuid.UUID,
+        page: int,
+        limit: int,
+        status: RouteStatus | None = None,
+        source: RouteSource | None = None,
+        date_from: datetime.datetime | None = None,
+        date_to: datetime.datetime | None = None,
+    ) -> RoutesPublic:
+        routes, total = await self.repository.list_user_routes(
+            user_id=user_id,
+            skip=(page - 1) * limit,
+            limit=limit,
+            status=status,
+            source=source,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        return RoutesPublic(
+            data=[
+                RouteListItemPublic(
+                    id=route.id,
+                    title=route.title,
+                    status=route.status,
+                    source=route.source,
+                    duration_minutes=route.duration_minutes,
+                    distance_meters=route.distance_meters,
+                    created_at=route.created_at,
+                )
+                for route in routes
+            ],
+            meta=PaginationMeta.create(page=page, limit=limit, total=total),
+        )
+
+    async def get_route_history(
+        self,
+        user_id: uuid.UUID,
+        page: int,
+        limit: int,
+        status: RouteStatus | None = None,
+        source: RouteSource | None = None,
+        date_from: datetime.datetime | None = None,
+        date_to: datetime.datetime | None = None,
+    ) -> RoutesPublic:
+        return await self.get_routes(
+            user_id=user_id,
+            page=page,
+            limit=limit,
+            status=status,
+            source=source,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
+    async def get_route(
+        self,
+        *,
+        route_id: str,
+        user_id: uuid.UUID,
+    ) -> RouteResponse:
+        route = await self._get_user_route(route_id=route_id, user_id=user_id)
+        points = await self.repository.get_route_points(route_id=route.id)
+        poes_map = await self.poe_repository.get_by_ids(ids=[point.poe_id for point in points])
+        return DetailResponse(
+            data=RouteDetailPublic(
+                id=route.id,
+                title=route.title,
+                description=route.description,
+                city_id=route.city_id,
+                status=route.status,
+                source=route.source,
+                duration_minutes=route.duration_minutes,
+                distance_meters=route.distance_meters,
+                pace=route.pace,
+                start_point=Location(
+                    lat=route.start_lat or 0.0,
+                    lng=route.start_lng or 0.0,
+                    address=route.start_address,
+                ),
+                points=[
+                    RoutePointDetailPublic(
+                        order=point.order,
+                        poe=RoutePoeShort(
+                            id=poe.id,
+                            title=poe.title,
+                            category=poe.category,
+                        ),
+                        planned_stop_minutes=point.planned_stop_minutes,
+                    )
+                    for point in points
+                    if (poe := poes_map.get(point.poe_id)) is not None
+                ],
+                accessibility_score=route.accessibility_score,
+                created_at=route.created_at,
+            ),
+        )
+
+    async def save_route(
+        self,
+        *,
+        route_id: str,
+        user_id: uuid.UUID,
+    ) -> RouteSaveResponse:
+        route = await self._get_user_route(route_id=route_id, user_id=user_id)
+        route.status = RouteStatus.SAVED
+        await self.repository.save_route(route)
+        return DetailResponse(data=RouteSavedPublic(id=route.id, status=route.status))
+
+    async def start_route(self, route_id: str, user_id: uuid.UUID) -> RouteJourneyResponse:
+        route = await self._get_user_route(route_id=route_id, user_id=user_id)
+        if route.status == RouteStatus.COMPLETED:
+            raise HTTPException(status_code=409, detail="Completed route cannot be started")
+        route.status = RouteStatus.IN_PROGRESS
+        route.started_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+        route.progress_order = max(route.progress_order, 1)
+        route = await self.repository.save_route(route)
+        return DetailResponse(data=self._journey_public(route))
+
+    async def progress_route(
+        self,
+        route_id: str,
+        user_id: uuid.UUID,
+        progress_in: RouteProgressUpdate,
+    ) -> RouteJourneyResponse:
+        route = await self._get_user_route(route_id=route_id, user_id=user_id)
+        if route.status != RouteStatus.IN_PROGRESS:
+            raise HTTPException(status_code=409, detail="Route is not in progress")
+        points = await self.repository.get_route_points(route.id)
+        if not points:
+            raise HTTPException(status_code=409, detail="Route has no points")
+        max_order = max(point.order for point in points)
+        if progress_in.order > max_order:
+            raise HTTPException(status_code=422, detail="Progress order exceeds route points count")
+        route.progress_order = progress_in.order
+        route = await self.repository.save_route(route)
+        return DetailResponse(data=self._journey_public(route))
+
+    async def finish_route(self, route_id: str, user_id: uuid.UUID) -> RouteJourneyResponse:
+        route = await self._get_user_route(route_id=route_id, user_id=user_id)
+        if route.status != RouteStatus.IN_PROGRESS:
+            raise HTTPException(status_code=409, detail="Route is not in progress")
+        route.status = RouteStatus.COMPLETED
+        route.completed_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+        route = await self.repository.save_route(route)
+        return DetailResponse(data=self._journey_public(route))
+
+    async def update_route(
+        self,
+        route_id: str,
+        user_id: uuid.UUID,
+        route_in: RouteManualUpdate,
+    ) -> RouteResponse:
+        route = await self._get_user_route(route_id=route_id, user_id=user_id)
+        payload = route_in.model_dump(exclude_unset=True)
+        points_payload = payload.pop("points", None)
+        for key, value in payload.items():
+            setattr(route, key, value)
+        route.source = RouteSource.MANUAL
+        route = await self.repository.save_route(route)
+
+        if points_payload is not None:
+            point_models = [RoutePointEdit.model_validate(item) for item in points_payload]
+            poes_map = await self.poe_repository.get_by_ids(
+                ids=[point.poe_id for point in point_models],
+            )
+            missing = [point.poe_id for point in point_models if point.poe_id not in poes_map]
+            if missing:
+                raise HTTPException(status_code=404, detail=f"POE not found: {missing[0]}")
+            points = [
+                RoutePoint(
+                    route_id=route.id,
+                    order=index,
+                    poe_id=point.poe_id,
+                    planned_stop_minutes=point.planned_stop_minutes,
+                )
+                for index, point in enumerate(point_models, start=1)
+            ]
+            await self.repository.replace_route_points(route.id, points)
+
+        return await self.get_route(route_id=route.id, user_id=user_id)
+
+    async def delete_route(
+        self,
+        *,
+        route_id: str,
+        user_id: uuid.UUID,
+    ) -> None:
+        route = await self._get_user_route(route_id=route_id, user_id=user_id)
+        await self.repository.delete(route)
+
+    async def _get_user_route(self, route_id: str, user_id: uuid.UUID) -> Route:
+        route = await self.repository.get_by_id(route_id)
+        if route is None:
+            raise HTTPException(status_code=404, detail="Route not found")
+        if route.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to access route")
+        return route
+
+    def _journey_public(self, route: Route) -> RouteJourneyPublic:
+        return RouteJourneyPublic(
+            id=route.id,
+            status=route.status,
+            progress_order=route.progress_order,
+            started_at=route.started_at,
+            completed_at=route.completed_at,
+        )
 
     def _select_points(self, request: RouteGenerateRequest, candidates: list[Poe]) -> list[Poe]:
         interests = {interest.lower() for interest in request.interests}

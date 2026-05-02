@@ -1,10 +1,11 @@
 import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.security import OAuth2PasswordRequestForm
 
 from src.app.api.dependencies.common import UserServiceDep
+from src.app.api.dependencies.users import CurrentUser
 from src.app.core.security import create_access_token
 from src.app.core.settings import get_project_settings
 from src.app.db.models.user import UserCreate, UserPublic
@@ -69,3 +70,8 @@ async def create_super_user(
         )
     access_token_expires = datetime.timedelta(minutes=project_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return Token(access_token=create_access_token(str(user.id), access_token_expires))
+
+
+@router.post("/logout", status_code=204)
+async def logout_user(current_user: CurrentUser) -> Response:
+    return Response(status_code=204)

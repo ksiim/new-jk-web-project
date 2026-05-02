@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from sqlalchemy import JSON, Column
+from sqlalchemy import JSON, Column, ForeignKey
 from sqlmodel import Field, SQLModel
 
 from src.app.const import Variants
@@ -29,6 +29,13 @@ class SlotStatus(Variants):
     AVAILABLE = "available"
     SOLD_OUT = "sold_out"
     CANCELLED = "cancelled"
+
+
+class TourStatus(Variants):
+    DRAFT = "draft"
+    MODERATION = "moderation"
+    PUBLISHED = "published"
+    HIDDEN = "hidden"
 
 
 class Price(SQLModel):
@@ -93,6 +100,13 @@ class Tour(TourBase, table=True):
     __tablename__ = "tours"  # type: ignore
 
     id: str = Field(default_factory=build_tour_id, primary_key=True, max_length=32)
+    status: TourStatus = Field(default=TourStatus.DRAFT, index=True)
+    moderation_reason: str | None = Field(default=None, max_length=1024)
+    moderated_at: datetime.datetime | None = None
+    moderated_by: uuid.UUID | None = Field(
+        default=None,
+        sa_column=Column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+    )
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
 
 
@@ -111,7 +125,40 @@ class TourSlot(SQLModel, table=True):
 
 
 class TourCreate(TourBase):
-    pass
+    guide_id: str | None = None
+    guide_name: str | None = None
+    guide_avatar_url: str | None = None
+    guide_rating: float = 0.0
+    guide_reviews_count: int = 0
+    guide_bio: str | None = None
+
+
+class TourUpdate(SQLModel):
+    title: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    format: TourFormat | None = None
+    language: str | None = Field(default=None, max_length=8)
+    duration_minutes: int | None = Field(default=None, ge=1)
+    group_size_max: int | None = Field(default=None, ge=1)
+    price_amount: int | None = Field(default=None, ge=0)
+    price_currency: str | None = Field(default=None, max_length=8)
+    tags: list[str] | None = None
+    meeting_lat: float | None = None
+    meeting_lng: float | None = None
+    meeting_address: str | None = Field(default=None, max_length=512)
+    wheelchair_accessible: bool | None = None
+    avoid_stairs_possible: bool | None = None
+    cover_image_url: str | None = Field(default=None, max_length=512)
+    images: list[str] | None = None
+    cancellation_policy: str | None = Field(default=None, max_length=64)
+
+
+class TourStatusUpdate(SQLModel):
+    status: TourStatus
+
+
+class TourModerationDecision(SQLModel):
+    reason: str | None = Field(default=None, max_length=1024)
 
 
 class TourSlotCreate(SQLModel):
@@ -122,6 +169,14 @@ class TourSlotCreate(SQLModel):
     status: SlotStatus = SlotStatus.AVAILABLE
 
 
+class TourSlotUpdate(SQLModel):
+    starts_at: datetime.datetime | None = None
+    ends_at: datetime.datetime | None = None
+    available_capacity: int | None = Field(default=None, ge=0)
+    price: Price | None = None
+    status: SlotStatus | None = None
+
+
 class TourPublic(SQLModel):
     id: str
     title: str
@@ -130,6 +185,7 @@ class TourPublic(SQLModel):
     format: TourFormat
     language: str
     duration_minutes: int
+    status: TourStatus
     price: Price
     guide: GuidePublic
     rating: float
@@ -149,12 +205,14 @@ class TourDetail(SQLModel):
     format: TourFormat
     language: str
     duration_minutes: int
+    status: TourStatus
     group_size_max: int
     price: Price
     tags: list[str]
     meeting_point: Location
     route_preview: RoutePreview
     accessibility: TourAccessibility
+    moderation_reason: str | None = None
     images: list[str]
     cancellation_policy: str
 

@@ -5,12 +5,29 @@ from src.app.api.dependencies.pagination import PaginationDep
 from src.app.api.dependencies.users import CurrentUser
 from src.app.db.models.review import (
     PoeReviewCreate,
+    ReviewEntityType,
     ReviewResponse,
     ReviewsPublic,
     TourReviewCreate,
 )
+from src.app.db.schemas import DetailResponse
 
 router = APIRouter()
+
+
+@router.get("/reviews/me", response_model=ReviewsPublic)
+async def read_my_reviews(
+    review_service: ReviewServiceDep,
+    current_user: CurrentUser,
+    pagination: PaginationDep,
+    entity_type: ReviewEntityType | None = None,
+) -> ReviewsPublic:
+    return await review_service.get_my_reviews(
+        user_id=current_user.id,
+        page=pagination.page,
+        limit=pagination.limit,
+        entity_type=entity_type,
+    )
 
 
 @router.get("/tours/{tour_id}/reviews", response_model=ReviewsPublic)
@@ -54,3 +71,12 @@ async def create_poe_review(
         review_in=review_in,
         current_user=current_user,
     )
+
+
+@router.delete("/reviews/me/{review_id}", response_model=DetailResponse[dict[str, str]])
+async def delete_my_review(
+    review_service: ReviewServiceDep,
+    current_user: CurrentUser,
+    review_id: str,
+) -> DetailResponse[dict[str, str]]:
+    return await review_service.delete_my_review(review_id=review_id, user_id=current_user.id)

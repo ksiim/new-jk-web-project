@@ -1,7 +1,9 @@
 from collections.abc import Sequence
 from typing import Any, Generic, TypeVar
 
+from fastapi import HTTPException
 from sqlalchemy import Select, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import SQLModel
 
@@ -47,5 +49,12 @@ class BaseRepository(Generic[ModelT]):  # noqa: UP046
 
     async def delete(self, entity: ModelT) -> bool:
         await self.session.delete(entity)
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Entity cannot be deleted due to linked records",
+            ) from exc
         return True

@@ -3,7 +3,13 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-from src.app.db.models.poe import PoeCreate
+from src.app.db.models.poe import (
+    PoeCreate,
+    PoeModerationDecision,
+    PoeTaxonomyCreate,
+    PoeTaxonomyUpdate,
+    PoeUpdate,
+)
 from src.app.service.poe import (
     PoeService,
     distance_meters,
@@ -17,11 +23,16 @@ from src.app.service.poe import (
 
 
 class FakePoeRepository:
-    def __init__(self, *, poes=None, poe=None):
+    def __init__(self, poes=None, poe=None):
         self.poes = poes or []
         self.poe = poe
+        self.taxonomies = []
 
     async def add(self, entity):
+        if hasattr(entity, "type") and hasattr(entity, "value") and hasattr(entity, "status"):
+            existing = await self.get_taxonomy(getattr(entity, "id", ""))
+            if not existing:
+                self.taxonomies.append(entity)
         return entity
 
     async def get_by_id(self, entity_id: str):
@@ -34,6 +45,32 @@ class FakePoeRepository:
 
     async def list_candidates(self, **kwargs):
         return self.poes
+
+    async def list_admin_poes(self, skip, limit, status=None):
+        items = self.poes
+        if status is not None:
+            items = [item for item in items if item.status == status]
+        return items[skip : skip + limit], len(items)
+
+    async def list_taxonomies(self, skip, limit, type_value=None, status=None):
+        items = self.taxonomies
+        if type_value is not None:
+            items = [item for item in items if item.type == type_value]
+        if status is not None:
+            items = [item for item in items if item.status == status]
+        return items[skip : skip + limit], len(items)
+
+    async def get_taxonomy_by_type_and_value(self, type_value, value):
+        for item in self.taxonomies:
+            if item.type == type_value and item.value == value:
+                return item
+        return None
+
+    async def get_taxonomy(self, taxonomy_id):
+        for item in self.taxonomies:
+            if item.id == taxonomy_id:
+                return item
+        return None
 
 
 def test_distance_meters_returns_positive_value():
@@ -129,3 +166,46 @@ async def test_get_map_poes_returns_map_items(sample_poe):
     )
     assert response.data[0].id == sample_poe.id
     assert response.data[0].is_accessible is True
+
+
+@pytest.mark.asyncio
+async def test_get_admin_poes_returns_paginated_data(sample_poe):
+    repository = FakePoeRepository(poes=[sample_poe])
+    response = await PoeService(repository).get_admin_poes(page=1, limit=20)
+    assert response.meta.total == 1
+    assert response.data[0].id == sample_poe.id
+
+
+@pytest.mark.asyncio
+async def test_update_poe_updates_fields(sample_poe):
+    repository = FakePoeRepository(poe=sample_poe)
+    response = await PoeService(repository).update_poe(
+        sample_poe.id,
+        PoeUpdate(title="Updated"),
+    )
+    assert response.data.title == "Updated"
+
+
+@pytest.mark.asyncio
+async def test_hide_and_delete_poe_set_status(sample_poe):
+    repository = FakePoeRepository(poe=sample_poe)
+    hidden = await PoeService(repository).hide_poe(sample_poe.id, PoeModerationDecision(reason="policy"))
+    assert hidden.data.title == sample_poe.title
+    assert repository.poe.status == "hidden"
+    deleted = await PoeService(repository).delete_poe(sample_poe.id, PoeModerationDecision(reason="delete"))
+    assert deleted.data.title == sample_poe.title
+    assert repository.poe.status == "deleted"
+
+
+@pytest.mark.asyncio
+async def test_taxonomy_crud_flow():
+    repository = FakePoeRepository()
+    service = PoeService(repository)
+    created = await service.create_taxonomy(PoeTaxonomyCreate(type="category", value="museum"))
+    assert created.data.value == "museum"
+    listed = await service.get_taxonomies(page=1, limit=20, type_value="category")
+    assert listed.meta.total == 1
+    updated = await service.update_taxonomy(created.data.id, PoeTaxonomyUpdate(value="art_museum"))
+    assert updated.data.value == "art_museum"
+    archived = await service.archive_taxonomy(created.data.id)
+    assert archived.data.status == "archived"

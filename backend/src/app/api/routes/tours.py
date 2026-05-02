@@ -1,9 +1,11 @@
 import datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from src.app.api.dependencies.common import TourServiceDep
 from src.app.api.dependencies.pagination import PaginationDep
+from src.app.api.dependencies.users import get_current_guide_or_admin
 from src.app.db.models.tour import (
     TourCreate,
     TourFormat,
@@ -11,10 +13,16 @@ from src.app.db.models.tour import (
     TourSlotCreate,
     TourSlotResponse,
     TourSlotsResponse,
+    TourSlotUpdate,
     ToursPublic,
+    TourStatus,
+    TourStatusUpdate,
+    TourUpdate,
 )
+from src.app.db.models.user import Role, User
 
 router = APIRouter()
+GuideOrAdminUser = Annotated[User, Depends(get_current_guide_or_admin)]
 
 
 @router.get("", response_model=ToursPublic)
@@ -50,9 +58,31 @@ async def read_tours(
 @router.post("", response_model=TourResponse, status_code=201)
 async def create_tour(
     tour_service: TourServiceDep,
+    current_user: GuideOrAdminUser,
     tour_in: TourCreate,
 ) -> TourResponse:
-    return await tour_service.create_tour(tour_in)
+    tour_payload = tour_in.model_copy(
+        update={
+            "guide_id": str(current_user.id),
+            "guide_name": f"{current_user.name} {current_user.surname}".strip(),
+        },
+    )
+    if current_user.role == Role.ADMIN:
+        tour_payload.status = TourStatus.PUBLISHED
+    return await tour_service.create_tour(tour_payload)
+
+
+@router.get("/me", response_model=ToursPublic)
+async def read_my_tours(
+    tour_service: TourServiceDep,
+    current_user: GuideOrAdminUser,
+    pagination: PaginationDep,
+) -> ToursPublic:
+    return await tour_service.get_my_tours(
+        guide_id=current_user.id,
+        page=pagination.page,
+        limit=pagination.limit,
+    )
 
 
 @router.get("/{tour_id}", response_model=TourResponse)
@@ -84,3 +114,61 @@ async def create_tour_slot(
     slot_in: TourSlotCreate,
 ) -> TourSlotResponse:
     return await tour_service.create_slot(tour_id=tour_id, slot_in=slot_in)
+
+
+@router.patch("/{tour_id}", response_model=TourResponse)
+async def update_my_tour(
+    tour_service: TourServiceDep,
+    current_user: GuideOrAdminUser,
+    tour_id: str,
+    tour_in: TourUpdate,
+) -> TourResponse:
+    return await tour_service.update_my_tour(
+        guide_id=current_user.id,
+        tour_id=tour_id,
+        tour_in=tour_in,
+    )
+
+
+@router.patch("/{tour_id}/slots/{slot_id}", response_model=TourSlotResponse)
+async def update_my_tour_slot(
+    tour_service: TourServiceDep,
+    current_user: GuideOrAdminUser,
+    tour_id: str,
+    slot_id: str,
+    slot_in: TourSlotUpdate,
+) -> TourSlotResponse:
+    return await tour_service.update_my_slot(
+        guide_id=current_user.id,
+        tour_id=tour_id,
+        slot_id=slot_id,
+        slot_in=slot_in,
+    )
+
+
+@router.post("/{tour_id}/slots/{slot_id}/close", response_model=TourSlotResponse)
+async def close_my_tour_slot(
+    tour_service: TourServiceDep,
+    current_user: GuideOrAdminUser,
+    tour_id: str,
+    slot_id: str,
+) -> TourSlotResponse:
+    return await tour_service.close_my_slot(
+        guide_id=current_user.id,
+        tour_id=tour_id,
+        slot_id=slot_id,
+    )
+
+
+@router.patch("/{tour_id}/status", response_model=TourResponse)
+async def update_my_tour_status(
+    tour_service: TourServiceDep,
+    current_user: GuideOrAdminUser,
+    tour_id: str,
+    status_in: TourStatusUpdate,
+) -> TourResponse:
+    return await tour_service.update_my_tour_status(
+        guide_id=current_user.id,
+        tour_id=tour_id,
+        status_in=status_in,
+    )
