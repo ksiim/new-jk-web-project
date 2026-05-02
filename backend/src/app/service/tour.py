@@ -1,8 +1,10 @@
 import datetime
+import uuid
 from collections.abc import Sequence
 
 from fastapi import HTTPException
 
+from src.app.db.models.guide_profile import GuideStatsPublic, GuideStatsResponse, GuideTopTourPublic
 from src.app.db.models.tour import (
     GuideDetail,
     GuidePublic,
@@ -15,6 +17,7 @@ from src.app.db.models.tour import (
     TourCreate,
     TourDetail,
     TourFormat,
+    TourModerationDecision,
     TourPublic,
     TourResponse,
     TourSlot,
@@ -22,7 +25,11 @@ from src.app.db.models.tour import (
     TourSlotPublic,
     TourSlotResponse,
     TourSlotsResponse,
+    TourSlotUpdate,
     ToursPublic,
+    TourStatus,
+    TourStatusUpdate,
+    TourUpdate,
 )
 from src.app.db.schemas import DetailResponse, PaginationMeta
 from src.app.repositories.tour import TourRepository
@@ -79,6 +86,7 @@ def tour_to_public(tour: Tour) -> TourPublic:
         format=tour.format,
         language=tour.language,
         duration_minutes=tour.duration_minutes,
+        status=tour.status,
         price=tour_to_price(tour),
         guide=tour_to_guide(tour),
         rating=tour.rating,
@@ -100,6 +108,7 @@ def tour_to_detail(tour: Tour) -> TourDetail:
         format=tour.format,
         language=tour.language,
         duration_minutes=tour.duration_minutes,
+        status=tour.status,
         group_size_max=tour.group_size_max,
         price=tour_to_price(tour),
         tags=tour.tags,
@@ -113,6 +122,7 @@ def tour_to_detail(tour: Tour) -> TourDetail:
             points_count=tour.route_points_count,
         ),
         accessibility=tour_to_accessibility(tour),
+        moderation_reason=tour.moderation_reason,
         images=tour.images,
         cancellation_policy=tour.cancellation_policy,
     )
@@ -178,6 +188,51 @@ class TourService(BaseService[TourRepository]):
         tour = await self._apply_runtime_rating(tour)
         return DetailResponse(data=tour_to_detail(tour))
 
+    async def get_my_tours(
+        self,
+        *,
+        guide_id: uuid.UUID,
+        page: int,
+        limit: int,
+    ) -> ToursPublic:
+        tours, total = await self.repository.list_guide_tours(
+            guide_id=str(guide_id),
+            skip=(page - 1) * limit,
+            limit=limit,
+        )
+        tours = await self._apply_runtime_ratings(tours)
+        return ToursPublic(
+            data=[tour_to_public(tour) for tour in tours],
+            meta=PaginationMeta.create(page=page, limit=limit, total=total),
+        )
+
+    async def update_my_tour(
+        self,
+        *,
+        guide_id: uuid.UUID,
+        tour_id: str,
+        tour_in: TourUpdate,
+    ) -> TourResponse:
+        tour = await self._get_guide_tour(guide_id=guide_id, tour_id=tour_id)
+        for field, value in tour_in.model_dump(exclude_unset=True).items():
+            setattr(tour, field, value)
+        tour = await self.repository.save_tour(tour)
+        tour = await self._apply_runtime_rating(tour)
+        return DetailResponse(data=tour_to_detail(tour))
+
+    async def update_my_tour_status(
+        self,
+        *,
+        guide_id: uuid.UUID,
+        tour_id: str,
+        status_in: TourStatusUpdate,
+    ) -> TourResponse:
+        tour = await self._get_guide_tour(guide_id=guide_id, tour_id=tour_id)
+        tour.status = status_in.status
+        tour = await self.repository.save_tour(tour)
+        tour = await self._apply_runtime_rating(tour)
+        return DetailResponse(data=tour_to_detail(tour))
+
     async def create_slot(
         self,
         *,
@@ -228,6 +283,150 @@ class TourService(BaseService[TourRepository]):
         )
         return DetailResponse(data=[slot_to_public(slot) for slot in slots])
 
+    async def get_guide_stats(self, guide_id: uuid.UUID) -> GuideStatsResponse:
+        _, tours_count = await self.repository.list_guide_tours(
+            guide_id=str(guide_id),
+            skip=0,
+            limit=1,
+        )
+        bookings_count = await self.repository.get_guide_bookings_count(guide_id=str(guide_id))
+        avg_rating = await self.repository.get_guide_avg_rating(guide_id=str(guide_id))
+        top_rows = await self.repository.get_guide_top_tours(guide_id=str(guide_id), limit=5)
+        return DetailResponse(
+            data=GuideStatsPublic(
+                tours_count=tours_count,
+                bookings_count=bookings_count,
+                avg_rating=avg_rating,
+                top_tours=[
+                    GuideTopTourPublic(
+                        id=tour_id,
+                        title=title,
+                        bookings_count=bookings_count_item,
+                        rating=rating,
+                    )
+                    for tour_id, title, bookings_count_item, rating in top_rows
+                ],
+            ),
+        )
+
+    async def get_admin_tours(
+        self,
+        page: int,
+        limit: int,
+        status: TourStatus | None = None,
+    ) -> ToursPublic:
+        tours, total = await self.repository.list_admin_tours(
+            skip=(page - 1) * limit,
+            limit=limit,
+            status=status,
+        )
+        tours = await self._apply_runtime_ratings(tours)
+        return ToursPublic(
+            data=[tour_to_public(tour) for tour in tours],
+            meta=PaginationMeta.create(page=page, limit=limit, total=total),
+        )
+
+    async def approve_tour(
+        self,
+        tour_id: str,
+        admin_id: uuid.UUID,
+        decision_in: TourModerationDecision,
+    ) -> TourResponse:
+        return await self._moderate_tour(
+            tour_id=tour_id,
+            admin_id=admin_id,
+            status=TourStatus.PUBLISHED,
+            reason=decision_in.reason,
+        )
+
+    async def hide_tour(
+        self,
+        tour_id: str,
+        admin_id: uuid.UUID,
+        decision_in: TourModerationDecision,
+    ) -> TourResponse:
+        return await self._moderate_tour(
+            tour_id=tour_id,
+            admin_id=admin_id,
+            status=TourStatus.HIDDEN,
+            reason=decision_in.reason,
+        )
+
+    async def reject_tour(
+        self,
+        tour_id: str,
+        admin_id: uuid.UUID,
+        decision_in: TourModerationDecision,
+    ) -> TourResponse:
+        return await self._moderate_tour(
+            tour_id=tour_id,
+            admin_id=admin_id,
+            status=TourStatus.DRAFT,
+            reason=decision_in.reason,
+        )
+
+    async def update_my_slot(
+        self,
+        *,
+        guide_id: uuid.UUID,
+        tour_id: str,
+        slot_id: str,
+        slot_in: TourSlotUpdate,
+    ) -> TourSlotResponse:
+        tour = await self._get_guide_tour(guide_id=guide_id, tour_id=tour_id)
+        slot = await self.repository.get_slot(slot_id)
+        if not slot or slot.tour_id != tour.id:
+            raise HTTPException(status_code=404, detail="Slot not found")
+
+        starts_at = normalize_datetime(slot_in.starts_at) if slot_in.starts_at else slot.starts_at
+        ends_at = normalize_datetime(slot_in.ends_at) if slot_in.ends_at else slot.ends_at
+        if ends_at <= starts_at:
+            raise HTTPException(status_code=422, detail="ends_at must be after starts_at")
+
+        available_capacity = (
+            slot.available_capacity
+            if slot_in.available_capacity is None
+            else slot_in.available_capacity
+        )
+        if available_capacity > tour.group_size_max:
+            raise HTTPException(status_code=422, detail="available_capacity exceeds group_size_max")
+
+        next_status = slot.status if slot_in.status is None else slot_in.status
+        if next_status == SlotStatus.SOLD_OUT and available_capacity > 0:
+            raise HTTPException(
+                status_code=422,
+                detail="sold_out slot cannot have available capacity",
+            )
+        if available_capacity == 0:
+            next_status = SlotStatus.SOLD_OUT
+
+        slot.starts_at = starts_at
+        slot.ends_at = ends_at
+        slot.available_capacity = available_capacity
+        slot.status = next_status
+        if slot_in.price is not None:
+            slot.price_amount = slot_in.price.amount
+            slot.price_currency = slot_in.price.currency
+
+        slot = await self.repository.save_slot(slot)
+        return DetailResponse(data=slot_to_public(slot))
+
+    async def close_my_slot(
+        self,
+        *,
+        guide_id: uuid.UUID,
+        tour_id: str,
+        slot_id: str,
+    ) -> TourSlotResponse:
+        await self._get_guide_tour(guide_id=guide_id, tour_id=tour_id)
+        slot = await self.repository.get_slot(slot_id)
+        if not slot or slot.tour_id != tour_id:
+            raise HTTPException(status_code=404, detail="Slot not found")
+        slot.status = SlotStatus.CANCELLED
+        slot.available_capacity = 0
+        slot = await self.repository.save_slot(slot)
+        return DetailResponse(data=slot_to_public(slot))
+
     async def _apply_runtime_ratings(self, tours: Sequence[Tour]) -> list[Tour]:
         if not tours:
             return []
@@ -265,3 +464,29 @@ class TourService(BaseService[TourRepository]):
                 "guide_reviews_count": guide_reviews_count,
             },
         )
+
+    async def _get_guide_tour(self, guide_id: uuid.UUID, tour_id: str) -> Tour:
+        tour = await self.repository.get_by_id(tour_id)
+        if not tour:
+            raise HTTPException(status_code=404, detail="Tour not found")
+        if tour.guide_id != str(guide_id):
+            raise HTTPException(status_code=403, detail="Not authorized to manage this tour")
+        return tour
+
+    async def _moderate_tour(
+        self,
+        tour_id: str,
+        admin_id: uuid.UUID,
+        status: TourStatus,
+        reason: str | None,
+    ) -> TourResponse:
+        tour = await self.repository.get_by_id(tour_id)
+        if not tour:
+            raise HTTPException(status_code=404, detail="Tour not found")
+        tour.status = status
+        tour.moderation_reason = reason
+        tour.moderated_by = admin_id
+        tour.moderated_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+        tour = await self.repository.save_tour(tour)
+        tour = await self._apply_runtime_rating(tour)
+        return DetailResponse(data=tour_to_detail(tour))

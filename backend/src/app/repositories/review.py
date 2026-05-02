@@ -40,6 +40,26 @@ class ReviewRepository(BaseRepository[Review]):
         total = (await self.session.execute(total_statement)).scalar_one()
         return items, total
 
+    async def list_user_reviews(
+        self,
+        *,
+        user_id: UUID,
+        skip: int,
+        limit: int,
+        entity_type: ReviewEntityType | None = None,
+    ) -> tuple[Sequence[Review], int]:
+        statement = select(Review).where(Review.user_id == user_id)
+        if entity_type is not None:
+            statement = statement.where(Review.entity_type == entity_type)
+        statement = statement.order_by(Review.created_at.desc())
+        items = (await self.session.execute(statement.offset(skip).limit(limit))).scalars().all()
+
+        total_statement = select(func.count()).select_from(Review).where(Review.user_id == user_id)
+        if entity_type is not None:
+            total_statement = total_statement.where(Review.entity_type == entity_type)
+        total = (await self.session.execute(total_statement)).scalar_one()
+        return items, total
+
     async def get_tour(self, tour_id: str) -> Tour | None:
         return await self.session.get(Tour, tour_id)
 
@@ -49,11 +69,19 @@ class ReviewRepository(BaseRepository[Review]):
     async def get_booking(self, booking_id: str) -> Booking | None:
         return await self.session.get(Booking, booking_id)
 
-    async def get_user_tour_review(self, *, booking_id: str, user_id: UUID) -> Review | None:
+    async def get_user_tour_review(self, booking_id: str, user_id: UUID) -> Review | None:
         statement = select(Review).where(
             Review.booking_id == booking_id,
             Review.user_id == user_id,
             Review.entity_type == ReviewEntityType.TOUR,
+        )
+        result = await self.session.execute(statement)
+        return result.scalar_one_or_none()
+
+    async def get_user_review(self, review_id: str, user_id: UUID) -> Review | None:
+        statement = select(Review).where(
+            Review.id == review_id,
+            Review.user_id == user_id,
         )
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
@@ -109,3 +137,56 @@ class ReviewRepository(BaseRepository[Review]):
 
         await self.session.commit()
         return review
+
+    async def list_admin_reviews(
+        self,
+        skip: int,
+        limit: int,
+        suspicious: bool | None = None,
+        hidden: bool | None = None,
+    ) -> tuple[Sequence[Review], int]:
+        statement = select(Review)
+        total_statement = select(func.count()).select_from(Review)
+        if suspicious is not None:
+            statement = statement.where(Review.suspicious == suspicious)
+            total_statement = total_statement.where(Review.suspicious == suspicious)
+        if hidden is not None:
+            statement = statement.where(Review.hidden == hidden)
+            total_statement = total_statement.where(Review.hidden == hidden)
+        statement = statement.order_by(Review.created_at.desc()).offset(skip).limit(limit)
+        items = (await self.session.execute(statement)).scalars().all()
+        total = int((await self.session.execute(total_statement)).scalar_one())
+        return items, total
+
+    async def list_guide_reviews(
+        self,
+        *,
+        guide_id: str,
+        skip: int,
+        limit: int,
+        rating: int | None = None,
+    ) -> tuple[Sequence[Review], int]:
+        statement = (
+            select(Review)
+            .join(Tour, Tour.id == Review.entity_id)
+            .where(
+                Review.entity_type == ReviewEntityType.TOUR,
+                Tour.guide_id == guide_id,
+            )
+        )
+        total_statement = (
+            select(func.count())
+            .select_from(Review)
+            .join(Tour, Tour.id == Review.entity_id)
+            .where(
+                Review.entity_type == ReviewEntityType.TOUR,
+                Tour.guide_id == guide_id,
+            )
+        )
+        if rating is not None:
+            statement = statement.where(Review.rating == rating)
+            total_statement = total_statement.where(Review.rating == rating)
+        statement = statement.order_by(Review.created_at.desc()).offset(skip).limit(limit)
+        items = (await self.session.execute(statement)).scalars().all()
+        total = int((await self.session.execute(total_statement)).scalar_one())
+        return items, total

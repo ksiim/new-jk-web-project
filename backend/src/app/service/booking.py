@@ -1,3 +1,4 @@
+import datetime
 import uuid
 
 from fastapi import HTTPException
@@ -153,6 +154,31 @@ class BookingService(BaseService[BookingRepository]):
             meta=PaginationMeta.create(page=page, limit=limit, total=total),
         )
 
+    async def get_guide_bookings(
+        self,
+        *,
+        guide_id: uuid.UUID,
+        page: int,
+        limit: int,
+        status: BookingStatus | None = None,
+        tour_id: str | None = None,
+        date_from: datetime.datetime | None = None,
+        date_to: datetime.datetime | None = None,
+    ) -> BookingsPublic:
+        bookings, total = await self.repository.list_guide_bookings(
+            guide_id=str(guide_id),
+            skip=(page - 1) * limit,
+            limit=limit,
+            status=status,
+            tour_id=tour_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        return BookingsPublic(
+            data=[await self._booking_to_public(booking) for booking in bookings],
+            meta=PaginationMeta.create(page=page, limit=limit, total=total),
+        )
+
     async def get_booking(
         self,
         *,
@@ -246,12 +272,96 @@ class BookingService(BaseService[BookingRepository]):
         await self.repository.save_booking_and_slot(booking=booking)
         return DetailResponse(data=payment_public)
 
+    async def confirm_booking_by_guide(
+        self,
+        *,
+        booking_id: str,
+        guide_id: uuid.UUID,
+    ) -> BookingResponse:
+        booking, tour, slot = await self._get_guide_booking_context(
+            booking_id=booking_id,
+            guide_id=guide_id,
+        )
+        if booking.status == BookingStatus.CONFIRMED:
+            return DetailResponse(data=booking_to_detail(booking, tour, slot))
+        if booking.status != BookingStatus.PENDING_PAYMENT:
+            raise HTTPException(
+                status_code=409,
+                detail="Booking cannot be confirmed in current status",
+            )
+        booking.status = BookingStatus.CONFIRMED
+        detail_public = booking_to_detail(booking, tour, slot)
+        await self.repository.save_booking_and_slot(booking=booking)
+        return DetailResponse(data=detail_public)
+
+    async def cancel_booking_by_guide(
+        self,
+        *,
+        booking_id: str,
+        guide_id: uuid.UUID,
+    ) -> BookingCancelResponse:
+        booking, _, slot = await self._get_guide_booking_context(
+            booking_id=booking_id,
+            guide_id=guide_id,
+        )
+        if booking.status in {BookingStatus.CANCELLED, BookingStatus.REFUNDED}:
+            refund_status = booking.refund_status or RefundStatus.NOT_REQUIRED
+            return DetailResponse(
+                data=BookingCancelledPublic(
+                    id=booking.id,
+                    status=BookingStatus.CANCELLED,
+                    refund_status=refund_status,
+                ),
+            )
+        if booking.status in {BookingStatus.COMPLETED}:
+            raise HTTPException(status_code=409, detail="Completed booking cannot be cancelled")
+
+        slot.available_capacity += booking.participants_count
+        if slot.status == SlotStatus.SOLD_OUT:
+            slot.status = SlotStatus.AVAILABLE
+
+        should_refund = booking.status == BookingStatus.CONFIRMED
+        booking.status = BookingStatus.CANCELLED
+        booking.cancel_reason = "Cancelled by guide"
+        booking.refund_status = RefundStatus.PENDING if should_refund else RefundStatus.NOT_REQUIRED
+        cancelled_public = BookingCancelledPublic(
+            id=booking.id,
+            status=booking.status,
+            refund_status=booking.refund_status,
+        )
+        await self.repository.save_booking_and_slot(booking=booking, slot=slot)
+        return DetailResponse(data=cancelled_public)
+
+    async def get_admin_bookings(
+        self,
+        page: int,
+        limit: int,
+        user_id: uuid.UUID | None = None,
+        tour_id: str | None = None,
+        status: BookingStatus | None = None,
+        date_from: datetime.datetime | None = None,
+        date_to: datetime.datetime | None = None,
+    ) -> BookingsPublic:
+        bookings, total = await self.repository.list_admin_bookings(
+            skip=(page - 1) * limit,
+            limit=limit,
+            user_id=user_id,
+            tour_id=tour_id,
+            status=status,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        return BookingsPublic(
+            data=[await self._booking_to_public(booking) for booking in bookings],
+            meta=PaginationMeta.create(page=page, limit=limit, total=total),
+        )
+
     async def _booking_to_public(self, booking: Booking) -> BookingPublic:
         tour = await self._get_booking_tour(booking)
         slot = await self._get_booking_slot(booking)
         return booking_to_public(booking, tour, slot)
 
-    async def _get_user_booking(self, *, booking_id: str, user_id: uuid.UUID) -> Booking:
+    async def _get_user_booking(self, booking_id: str, user_id: uuid.UUID) -> Booking:
         booking = await self.repository.get_by_id(booking_id)
         if not booking:
             raise HTTPException(status_code=404, detail="Booking not found")
@@ -270,6 +380,21 @@ class BookingService(BaseService[BookingRepository]):
         if not slot:
             raise HTTPException(status_code=404, detail="Slot not found")
         return slot
+
+    async def _get_guide_booking_context(
+        self,
+        *,
+        booking_id: str,
+        guide_id: uuid.UUID,
+    ) -> tuple[Booking, Tour, TourSlot]:
+        booking = await self.repository.get_by_id(booking_id)
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        tour = await self._get_booking_tour(booking)
+        if tour.guide_id != str(guide_id):
+            raise HTTPException(status_code=403, detail="Not authorized to manage booking")
+        slot = await self._get_booking_slot(booking)
+        return booking, tour, slot
 
     def _mock_payment_public(self, booking: Booking) -> MockPaymentPublic:
         return MockPaymentPublic(

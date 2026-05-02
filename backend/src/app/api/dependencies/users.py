@@ -93,6 +93,17 @@ async def get_current_admin(
         )
     return current_user
 
+
+async def get_current_guide_or_admin(
+    current_user: CurrentUser,
+) -> User:
+    if current_user.role not in {Role.GUIDE, Role.ADMIN}:
+        raise HTTPException(
+            status_code=403,
+            detail="The user doesn't have enough privileges",
+        )
+    return current_user
+
 async def verify_user_ownership(
     current_user: CurrentUser,
     user_id: uuid.UUID,

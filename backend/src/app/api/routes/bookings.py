@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from src.app.api.dependencies.common import BookingServiceDep
+from src.app.api.dependencies.common import BookingServiceDep, NotificationServiceDep
 from src.app.api.dependencies.pagination import PaginationDep
 from src.app.api.dependencies.users import CurrentUser
 from src.app.core.settings import get_project_settings
@@ -63,27 +63,43 @@ async def read_booking(
 @router.post("/{booking_id}/cancel", response_model=BookingCancelResponse)
 async def cancel_booking(
     booking_service: BookingServiceDep,
+    notification_service: NotificationServiceDep,
     current_user: CurrentUser,
     booking_id: str,
     cancel_in: BookingCancelRequest,
 ) -> BookingCancelResponse:
-    return await booking_service.cancel_booking(
+    response = await booking_service.cancel_booking(
         booking_id=booking_id,
         user_id=current_user.id,
         cancel_in=cancel_in,
     )
+    await notification_service.create_event(
+        user_id=current_user.id,
+        event_type="booking_cancelled",
+        title="Бронирование отменено",
+        payload=booking_id,
+    )
+    return response
 
 
 @router.post("/{booking_id}/mock-payment/confirm", response_model=MockPaymentResponse)
 async def confirm_mock_payment(
     booking_service: BookingServiceDep,
+    notification_service: NotificationServiceDep,
     current_user: CurrentUser,
     booking_id: str,
 ) -> MockPaymentResponse:
-    return await booking_service.confirm_mock_payment(
+    response = await booking_service.confirm_mock_payment(
         booking_id=booking_id,
         user_id=current_user.id,
     )
+    await notification_service.create_event(
+        user_id=current_user.id,
+        event_type="booking_confirmed",
+        title="Бронирование подтверждено",
+        payload=booking_id,
+    )
+    return response
 
 
 @router.post("/{booking_id}/mock-payment/refund", response_model=MockPaymentResponse)
