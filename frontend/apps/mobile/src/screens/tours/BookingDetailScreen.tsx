@@ -1,4 +1,5 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useQueryClient } from '@tanstack/react-query';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useBookingDetail, useCancelBooking } from '../../entities/tour/hooks';
@@ -22,6 +23,7 @@ function bookingStatusLabel(status: string): string {
 
 export function BookingDetailScreen({ route, navigation }: Props) {
   const { bookingId } = route.params;
+  const queryClient = useQueryClient();
   const detail = useBookingDetail(bookingId);
   const cancel = useCancelBooking();
 
@@ -43,6 +45,12 @@ export function BookingDetailScreen({ route, navigation }: Props) {
   const booking = detail.data;
   const canCancel =
     booking.status === 'pending_payment' || booking.status === 'confirmed';
+  const canPay = booking.status === 'pending_payment';
+
+  const refreshBooking = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['bookings', 'detail', booking.id] });
+    await queryClient.invalidateQueries({ queryKey: ['bookings', 'list'] });
+  };
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
@@ -74,16 +82,31 @@ export function BookingDetailScreen({ route, navigation }: Props) {
         <Text style={styles.actionText}>Открыть тур</Text>
       </Pressable>
 
+      {canPay ? (
+        <Pressable
+          style={[styles.actionBtn, styles.payBtn]}
+          onPress={() => navigation.navigate('TourPayment', { bookingId: booking.id })}
+        >
+          <Text style={[styles.actionText, styles.payText]}>Оплатить</Text>
+        </Pressable>
+      ) : null}
+
       {canCancel ? (
         <Pressable
           style={[styles.actionBtn, styles.cancelBtn]}
           onPress={async () => {
             await cancel.mutateAsync({ bookingId: booking.id });
-            navigation.goBack();
+            await refreshBooking();
           }}
+          disabled={cancel.isPending}
         >
-          <Text style={[styles.actionText, styles.cancelText]}>Отменить бронь</Text>
+          <Text style={[styles.actionText, styles.cancelText]}>
+            {cancel.isPending ? 'Отменяем...' : 'Отменить бронь'}
+          </Text>
         </Pressable>
+      ) : null}
+      {cancel.isError ? (
+        <Text style={styles.errorText}>{extractApiError(cancel.error)}</Text>
       ) : null}
     </ScrollView>
   );
@@ -113,5 +136,12 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     color: colors.errorText,
+  },
+  payBtn: {
+    borderColor: colors.accentButton,
+    backgroundColor: colors.accentButton,
+  },
+  payText: {
+    color: colors.white,
   },
 });

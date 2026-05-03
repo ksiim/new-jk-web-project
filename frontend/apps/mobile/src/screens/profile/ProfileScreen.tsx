@@ -7,9 +7,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuthStore } from '../../entities/auth/authStore';
-import { useProfileExtrasStore } from '../../entities/profile/profileExtrasStore';
+import { useExtrasForCurrentUser } from '../../shared/profile/useExtrasForCurrentUser';
 import type { MainStackParamList } from '../../navigation/MainNavigator';
 import { rootNavigationRef } from '../../navigation/navigationRef';
+import { useT } from '../../shared/i18n/useT';
 import { Avatar } from '../../shared/ui/Avatar';
 import { ConfirmModal } from '../../shared/ui/ConfirmModal';
 import { showSoonNotice } from '../../shared/ui/showSoonNotice';
@@ -19,21 +20,20 @@ import { colors } from '../../shared/theme/colors';
 type Nav = NativeStackNavigationProp<MainStackParamList>;
 
 export function ProfileScreen() {
+  const { t } = useT();
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
-  const phone = useProfileExtrasStore((s) => s.phone);
-  const localFullName = useProfileExtrasStore((s) => s.fullName);
-  const avatarUri = useProfileExtrasStore((s) => s.avatarUri);
+  const userId = useAuthStore((s) => s.user?.id);
+  const extras = useExtrasForCurrentUser(userId);
   const logout = useLogout();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const serverFullName = user ? `${user.surname ?? ''} ${user.name ?? ''}`.trim() : '';
-  const composedName = localFullName ?? serverFullName;
-  const displayName = composedName || 'Фамилия Имя';
-  const displayEmail = user?.email ?? 'example@email.com';
-  const displayPhone = phone ?? '+7 (999) 888 - 77 - 66';
-  const hasLocalProfileData = Boolean(localFullName || phone || avatarUri);
+  const composedName = extras.fullName ?? serverFullName;
+  const displayName = composedName || t('profile.namePlaceholder');
+  const displayEmail = user?.email ?? t('profile.emailPlaceholder');
+  const displayPhone = extras.phone?.trim() || null;
 
   const handleLogout = () => {
     setConfirmOpen(false);
@@ -52,11 +52,11 @@ export function ProfileScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.pageTitle}>Профиль</Text>
+        <Text style={styles.pageTitle}>{t('profile.title')}</Text>
 
         <View style={styles.userRow}>
           <Avatar
-            uri={avatarUri}
+            uri={extras.avatarUri}
             name={displayName}
             width={116}
             height={136}
@@ -65,16 +65,17 @@ export function ProfileScreen() {
           />
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{displayName}</Text>
-            {hasLocalProfileData ? (
-              <Text style={styles.localHint}>Некоторые изменения сохранены локально</Text>
-            ) : null}
             <Text style={styles.userMeta}>{displayEmail}</Text>
-            <Text style={styles.userMeta}>{displayPhone}</Text>
+            <Text
+              style={[styles.userMeta, !displayPhone ? styles.metaMuted : undefined]}
+            >
+              {displayPhone ?? t('profile.phoneNotSet')}
+            </Text>
             <Pressable
               style={styles.editBtn}
               onPress={() => navigation.navigate('ProfileEdit')}
             >
-              <Text style={styles.editBtnText}>Редактировать</Text>
+              <Text style={styles.editBtnText}>{t('profile.edit')}</Text>
             </Pressable>
           </View>
         </View>
@@ -82,55 +83,55 @@ export function ProfileScreen() {
         <View style={styles.tilesRow}>
           <Tile
             icon="heart"
-            label="Избранное"
+            label={t('profile.favourites')}
             onPress={() => navigation.navigate('ProfileFavourites')}
           />
           <Tile
             icon="message-square"
-            label="Ваши отзывы"
+            label={t('profile.reviews')}
             onPress={() => navigation.navigate('ProfileReviews')}
           />
         </View>
         <View style={styles.tilesRow}>
           <Tile
             icon="map"
-            label="Бронирования"
+            label={t('profile.reservations')}
             onPress={() => navigation.navigate('ProfileReservations')}
           />
           <Tile
             icon="credit-card"
-            label="Платежи"
-            onPress={() => showSoonNotice('Платежи')}
+            label={t('profile.paymentsSoon')}
+            onPress={() => navigation.navigate('ProfilePayments')}
           />
         </View>
 
         <View style={styles.menu}>
           <MenuRow
-            label="Ваши интересы и настройки"
+            label={t('profile.interests')}
             onPress={() => navigation.navigate('ProfileInterests')}
           />
           <MenuRow
-            label="Уведомления"
+            label={t('profile.notifications')}
             onPress={() => navigation.navigate('ProfileNotifications')}
           />
           <MenuRow
-            label="Язык"
+            label={t('profile.language')}
             onPress={() => navigation.navigate('ProfileLanguage')}
           />
           <MenuRow
-            label="Политика и условия пользования"
-            onPress={() => showSoonNotice('Политика и условия')}
+            label={t('profile.policy')}
+            onPress={() => showSoonNotice(t('profile.policy'))}
           />
-          <MenuRow label="Помощь" onPress={() => showSoonNotice('Помощь')} />
+          <MenuRow label={t('profile.help')} onPress={() => showSoonNotice(t('profile.help'))} />
         </View>
 
         <View style={styles.guideBlock}>
-          <Text style={styles.guideHint}>Хотите делиться опытом?</Text>
+          <Text style={styles.guideHint}>{t('profile.guideHint')}</Text>
           <Pressable
             style={styles.guideBtn}
-            onPress={() => showSoonNotice('Режим гида')}
+            onPress={() => navigation.navigate('GuideDashboard')}
           >
-            <Text style={styles.guideBtnText}>Перейти в режим гида</Text>
+            <Text style={styles.guideBtnText}>{t('profile.guideBtn')}</Text>
           </Pressable>
         </View>
 
@@ -138,14 +139,14 @@ export function ProfileScreen() {
           style={styles.logoutRow}
           onPress={() => setConfirmOpen(true)}
         >
-          <Text style={styles.logoutText}>Выйти из профиля</Text>
+          <Text style={styles.logoutText}>{t('profile.logout')}</Text>
           <Feather name="log-out" size={18} color={colors.textPrimary} />
         </Pressable>
       </ScrollView>
 
       <ConfirmModal
         visible={confirmOpen}
-        title="Вы уверены, что хотите выйти?"
+        title={t('profile.logoutConfirm')}
         onConfirm={handleLogout}
         onCancel={() => setConfirmOpen(false)}
       />
@@ -222,9 +223,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginTop: 2,
   },
-  localHint: {
-    marginTop: 2,
-    fontSize: 11,
+  metaMuted: {
     color: colors.textMuted,
   },
   editBtn: {

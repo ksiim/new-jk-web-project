@@ -24,11 +24,11 @@ import { ScreenHeader } from '../../shared/ui/ScreenHeader';
 import { SaveButton } from '../../shared/ui/SaveButton';
 import { colors } from '../../shared/theme/colors';
 
-const interestOptions: Array<{
+const interestOptions: {
   id: InterestId;
   label: string;
   icon: keyof typeof Feather.glyphMap;
-}> = [
+}[] = [
   { id: 'art', label: 'Искусство', icon: 'feather' },
   { id: 'coffee', label: 'Кофе', icon: 'coffee' },
   { id: 'history', label: 'История', icon: 'book-open' },
@@ -37,7 +37,7 @@ const interestOptions: Array<{
   { id: 'relax', label: 'Спокойный отдых', icon: 'smile' },
 ];
 
-const accessibilityOptions: Array<{ id: AccessibilityId; label: string }> = [
+const accessibilityOptions: { id: AccessibilityId; label: string }[] = [
   { id: 'wheelchair', label: 'Передвигаюсь с коляской' },
   { id: 'cane', label: 'Использую трость' },
   { id: 'ramps', label: 'Нужны пандусы' },
@@ -46,7 +46,7 @@ const accessibilityOptions: Array<{ id: AccessibilityId; label: string }> = [
   { id: 'none', label: 'Нет ограничений' },
 ];
 
-const tempoOptions: Array<{ id: Tempo; label: string }> = [
+const tempoOptions: { id: Tempo; label: string }[] = [
   { id: 'slow', label: 'Медленно' },
   { id: 'medium', label: 'Средне' },
   { id: 'fast', label: 'Быстро' },

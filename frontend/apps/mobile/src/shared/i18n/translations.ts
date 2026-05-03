@@ -1,0 +1,90 @@
+import type { LanguageId } from '../../entities/settings/settingsStore';
+
+/**
+ * Плоские ключи; для en заданы строки, остальные языки — через fallback на ru.
+ */
+const ru: Record<string, string> = {
+  'common.back': 'Назад',
+  'common.save': 'Сохранить',
+  'tabs.map': 'Карты',
+  'tabs.routes': 'Маршруты',
+  'tabs.home': 'Главная',
+  'tabs.tours': 'Туры',
+  'tabs.profile': 'Профиль',
+  'profile.title': 'Профиль',
+  'profile.edit': 'Редактировать',
+  'profile.namePlaceholder': 'Фамилия Имя',
+  'profile.emailPlaceholder': 'example@email.com',
+  'profile.phoneNotSet': 'Телефон не указан',
+  'profile.favourites': 'Избранное',
+  'profile.reviews': 'Ваши отзывы',
+  'profile.reservations': 'Бронирования',
+  'profile.paymentsSoon': 'Платежи',
+  'profile.interests': 'Ваши интересы и настройки',
+  'profile.notifications': 'Уведомления',
+  'profile.language': 'Язык',
+  'profile.policy': 'Политика и условия пользования',
+  'profile.help': 'Помощь',
+  'profile.guideHint': 'Хотите делиться опытом?',
+  'profile.guideBtn': 'Перейти в режим гида',
+  'profile.logout': 'Выйти из профиля',
+  'profile.logoutConfirm': 'Вы уверены, что хотите выйти?',
+  'profileEdit.title': 'Редактирование\nпрофиля',
+  'profileEdit.changePhoto': 'Изменить фото',
+  'profileEdit.removePhoto': 'Удалить фото',
+  'profileEdit.fullName': 'Фамилия Имя',
+  'profileEdit.email': 'Email',
+  'profileEdit.phone': 'Номер телефона',
+  'profileEdit.phonePlaceholder': '+7',
+  'profileEdit.changePassword': 'Изменить пароль',
+  'language.title': 'Язык',
+};
+
+const en: Record<string, string> = {
+  'common.back': 'Back',
+  'common.save': 'Save',
+  'tabs.map': 'Maps',
+  'tabs.routes': 'Routes',
+  'tabs.home': 'Home',
+  'tabs.tours': 'Tours',
+  'tabs.profile': 'Profile',
+  'profile.title': 'Profile',
+  'profile.edit': 'Edit',
+  'profile.namePlaceholder': 'Last name First name',
+  'profile.emailPlaceholder': 'example@email.com',
+  'profile.phoneNotSet': 'Phone not set',
+  'profile.favourites': 'Favourites',
+  'profile.reviews': 'Your reviews',
+  'profile.reservations': 'Bookings',
+  'profile.paymentsSoon': 'Payments',
+  'profile.interests': 'Your interests and settings',
+  'profile.notifications': 'Notifications',
+  'profile.language': 'Language',
+  'profile.policy': 'Policy and terms',
+  'profile.help': 'Help',
+  'profile.guideHint': 'Want to share your experience?',
+  'profile.guideBtn': 'Switch to guide mode',
+  'profile.logout': 'Log out',
+  'profile.logoutConfirm': 'Are you sure you want to log out?',
+  'profileEdit.title': 'Edit\nprofile',
+  'profileEdit.changePhoto': 'Change photo',
+  'profileEdit.removePhoto': 'Remove photo',
+  'profileEdit.fullName': 'Last name First name',
+  'profileEdit.email': 'Email',
+  'profileEdit.phone': 'Phone number',
+  'profileEdit.phonePlaceholder': '+1',
+  'profileEdit.changePassword': 'Change password',
+  'language.title': 'Language',
+};
+
+const byLang: Record<LanguageId, Record<string, string>> = {
+  ru,
+  en,
+  be: ru,
+  kk: ru,
+  zh: ru,
+};
+
+export function translate(lang: LanguageId, key: string): string {
+  return byLang[lang][key] ?? ru[key] ?? key;
+}

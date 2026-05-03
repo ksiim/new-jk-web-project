@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import axios from 'axios';
+import { isAxiosError } from 'axios';
 import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import {
@@ -14,6 +14,8 @@ import {
 import { Feather } from '@expo/vector-icons';
 
 import type { RootStackParamList } from '../../navigation/RootNavigator';
+import { useAuthStore } from '../../entities/auth/authStore';
+import { useProfileExtrasStore } from '../../entities/profile/profileExtrasStore';
 import { AuthPrimaryButton } from '../../features/auth/components/AuthPrimaryButton';
 import { LogoMark } from '../../features/auth/components/LogoMark';
 import {
@@ -33,12 +35,15 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 const DATE_OF_BIRTH_FALLBACK = '2000-01-01';
 
 function translateRegisterError(error: unknown): string {
-  if (axios.isAxiosError(error)) {
+  if (isAxiosError(error)) {
     if (!error.response) {
       return 'Нет соединения с сервером. Проверьте интернет.';
     }
     if (error.response.status === 409) {
       return 'Пользователь с таким email уже существует';
+    }
+    if (error.response.status === 503) {
+      return extractApiError(error);
     }
     if (error.response.status >= 500) {
       return 'Сервер временно недоступен. Попробуйте позже.';
@@ -103,6 +108,11 @@ export function RegisterScreen({ navigation }: Props) {
         date_of_birth: DATE_OF_BIRTH_FALLBACK,
       });
       await login.mutateAsync({ email, password });
+      const uid = useAuthStore.getState().user?.id;
+      const phoneTrimmed = values.phone.trim();
+      if (uid) {
+        useProfileExtrasStore.getState().setPhoneForUser(uid, phoneTrimmed || null);
+      }
       navigation.reset({ index: 0, routes: [{ name: 'OnboardingInterests' }] });
     } catch (error) {
       const message = translateRegisterError(error);

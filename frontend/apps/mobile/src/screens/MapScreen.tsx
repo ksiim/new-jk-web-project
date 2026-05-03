@@ -12,7 +12,6 @@ import {
   View,
 } from 'react-native';
 
-import { demoPlaces } from '../entities/place/places';
 import { usePreferencesStore } from '../entities/preferences/preferencesStore';
 import { usePoeDetail, usePoes } from '../entities/poe/hooks';
 import { poeToPlace } from '../entities/poe/mappers';
@@ -83,11 +82,8 @@ export function MapScreen() {
     if (poeList.data?.data?.length) {
       return poeList.data.data.map(poeToPlace);
     }
-    if (poeList.isError) {
-      return demoPlaces;
-    }
     return [];
-  }, [poeList.data?.data, poeList.isError]);
+  }, [poeList.data?.data]);
 
   const recommendations = useMemo(() => {
     const base = recommendPlaces(sourcePlaces, {
@@ -185,7 +181,7 @@ export function MapScreen() {
         {apiErrorText ? (
           <View style={styles.apiHintWrap}>
             <Text style={styles.apiHintTitle}>
-              API POE временно недоступен. Показаны демо-места.
+              API POE временно недоступен.
             </Text>
             <Text style={styles.apiHintBody}>{apiErrorText}</Text>
           </View>

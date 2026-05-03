@@ -13,6 +13,7 @@ import { ProfileLanguageScreen } from '../screens/profile/ProfileLanguageScreen'
 import { ProfileFavouritesScreen } from '../screens/profile/ProfileFavouritesScreen';
 import { ProfileReviewsScreen } from '../screens/profile/ProfileReviewsScreen';
 import { ProfileReservationsScreen } from '../screens/profile/ProfileReservationsScreen';
+import { ProfilePaymentsScreen } from '../screens/profile/ProfilePaymentsScreen';
 import { RoutesScreen } from '../screens/RoutesScreen';
 import { ToursScreen } from '../screens/ToursScreen';
 import { TourDetailScreen } from '../screens/tours/TourDetailScreen';
@@ -21,9 +22,14 @@ import { TourDeferredScreen } from '../screens/tours/TourDeferredScreen';
 import { TourReviewsScreen } from '../screens/tours/TourReviewsScreen';
 import { GuideProfileScreen } from '../screens/tours/GuideProfileScreen';
 import { BookingDetailScreen } from '../screens/tours/BookingDetailScreen';
+import { BookingPaymentErrorScreen } from '../screens/tours/BookingPaymentErrorScreen';
+import { BookingPaymentSuccessScreen } from '../screens/tours/BookingPaymentSuccessScreen';
+import { TourPaymentScreen } from '../screens/tours/TourPaymentScreen';
 import { MapFiltersScreen } from '../screens/map/MapFiltersScreen';
 import { PoeDetailScreen } from '../screens/map/PoeDetailScreen';
 import { ActiveRouteScreen } from '../screens/routes/ActiveRouteScreen';
+import { GuideDashboardScreen } from '../screens/guide/GuideDashboardScreen';
+import { useT } from '../shared/i18n/useT';
 import { colors } from '../shared/theme/colors';
 
 export type MainTabParamList = {
@@ -40,10 +46,13 @@ export type MainStackParamList = {
   PoeDetail: { poeId: string };
   TourDetail: { tourId: string; bookingId?: string };
   TourBooking: { tourId: string };
-  TourDeferred: { tourId: string };
+  TourDeferred: { tourId: string; bookingId?: string };
   TourReviews: { tourId: string };
   GuideProfile: { tourId: string };
   BookingDetail: { bookingId: string };
+  TourPayment: { bookingId: string };
+  BookingPaymentSuccess: { bookingId: string };
+  BookingPaymentError: { bookingId: string; errorMessage?: string };
   ActiveRoute: undefined;
   ProfileEdit: undefined;
   ProfileChangePassword: undefined;
@@ -53,12 +62,15 @@ export type MainStackParamList = {
   ProfileFavourites: undefined;
   ProfileReviews: undefined;
   ProfileReservations: undefined;
+  ProfilePayments: undefined;
+  GuideDashboard: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
 function TabsNavigator() {
+  const { t } = useT();
   return (
     <Tab.Navigator
       initialRouteName="Home"
@@ -91,19 +103,24 @@ function TabsNavigator() {
         },
       })}
     >
-      <Tab.Screen name="Map" component={MapScreen} options={{ title: 'Карты' }} />
-      <Tab.Screen name="Routes" component={RoutesScreen} options={{ title: 'Маршруты' }} />
-      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Главная' }} />
-      <Tab.Screen name="Tours" component={ToursScreen} options={{ title: 'Туры' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Профиль' }} />
+      <Tab.Screen name="Map" component={MapScreen} options={{ title: t('tabs.map') }} />
+      <Tab.Screen name="Routes" component={RoutesScreen} options={{ title: t('tabs.routes') }} />
+      <Tab.Screen name="Home" component={HomeScreen} options={{ title: t('tabs.home') }} />
+      <Tab.Screen name="Tours" component={ToursScreen} options={{ title: t('tabs.tours') }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: t('tabs.profile') }} />
     </Tab.Navigator>
   );
 }
 
-export function MainNavigator() {
+export function MainNavigator({ route }: { route?: { params?: { startInGuide?: boolean } } }) {
+  const startInGuide = Boolean(route?.params?.startInGuide);
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{ headerShown: false }}
+      initialRouteName={startInGuide ? 'GuideDashboard' : 'Tabs'}
+    >
       <Stack.Screen name="Tabs" component={TabsNavigator} />
+      <Stack.Screen name="GuideDashboard" component={GuideDashboardScreen} />
       <Stack.Screen
         name="MapFilters"
         component={MapFiltersScreen}
@@ -121,6 +138,9 @@ export function MainNavigator() {
       <Stack.Screen name="TourReviews" component={TourReviewsScreen} />
       <Stack.Screen name="GuideProfile" component={GuideProfileScreen} />
       <Stack.Screen name="BookingDetail" component={BookingDetailScreen} />
+      <Stack.Screen name="TourPayment" component={TourPaymentScreen} />
+      <Stack.Screen name="BookingPaymentSuccess" component={BookingPaymentSuccessScreen} />
+      <Stack.Screen name="BookingPaymentError" component={BookingPaymentErrorScreen} />
       <Stack.Screen name="ActiveRoute" component={ActiveRouteScreen} />
       <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
       <Stack.Screen
@@ -139,6 +159,7 @@ export function MainNavigator() {
         name="ProfileReservations"
         component={ProfileReservationsScreen}
       />
+      <Stack.Screen name="ProfilePayments" component={ProfilePaymentsScreen} />
     </Stack.Navigator>
   );
 }

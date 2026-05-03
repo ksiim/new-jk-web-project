@@ -2,38 +2,82 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-/**
- * Данные, которых нет на бэке, но нужны UI:
- *   - телефон (пока не хранится в user модели);
- *   - локально отредактированные ФИО (если юзер менял через форму редактирования);
- *   - URI аватара.
- * Всё персистится в AsyncStorage. Когда появится соответствующий API — просто
- * синхронизируем при логине/сохранении профиля.
- */
-export type ProfileExtrasState = {
+export type UserProfileExtras = {
   phone: string | null;
   fullName: string | null;
   avatarUri: string | null;
-  setPhone: (phone: string | null) => void;
-  setFullName: (fullName: string | null) => void;
-  setAvatarUri: (uri: string | null) => void;
+};
+
+/** Стабильная ссылка для пустых данных — нужна для селекторов zustand + useSyncExternalStore. */
+export const EMPTY_USER_EXTRAS: UserProfileExtras = Object.freeze({
+  phone: null,
+  fullName: null,
+  avatarUri: null,
+});
+
+/**
+ * Локальные поля профиля по user id (телефон на бэке в модели пользователя пока не хранится).
+ */
+export type ProfileExtrasState = {
+  _hasHydrated: boolean;
+  /** extras keyed by auth user id */
+  perUser: Record<string, UserProfileExtras>;
+  setHydrated: (value: boolean) => void;
+  setPhoneForUser: (userId: string, phone: string | null) => void;
+  setFullNameForUser: (userId: string, fullName: string | null) => void;
+  setAvatarForUser: (userId: string, uri: string | null) => void;
+  /** Очистить данные текущего пользователя (выход) */
+  clearUser: (userId: string) => void;
   reset: () => void;
 };
+
+function patchUser(
+  perUser: Record<string, UserProfileExtras>,
+  userId: string,
+  patch: Partial<UserProfileExtras>,
+): Record<string, UserProfileExtras> {
+  const prev = perUser[userId] ?? { ...EMPTY_USER_EXTRAS };
+  return {
+    ...perUser,
+    [userId]: { ...prev, ...patch },
+  };
+}
 
 export const useProfileExtrasStore = create<ProfileExtrasState>()(
   persist(
     (set) => ({
-      phone: null,
-      fullName: null,
-      avatarUri: null,
-      setPhone: (phone) => set({ phone }),
-      setFullName: (fullName) => set({ fullName }),
-      setAvatarUri: (avatarUri) => set({ avatarUri }),
-      reset: () => set({ phone: null, fullName: null, avatarUri: null }),
+      _hasHydrated: false,
+      perUser: {},
+      setHydrated: (value) => set({ _hasHydrated: value }),
+      setPhoneForUser: (userId, phone) =>
+        set((s) => ({ perUser: patchUser(s.perUser, userId, { phone }) })),
+      setFullNameForUser: (userId, fullName) =>
+        set((s) => ({ perUser: patchUser(s.perUser, userId, { fullName }) })),
+      setAvatarForUser: (userId, uri) =>
+        set((s) => ({ perUser: patchUser(s.perUser, userId, { avatarUri: uri }) })),
+      clearUser: (userId) =>
+        set((s) => {
+          const { [userId]: _, ...rest } = s.perUser;
+          return { perUser: rest };
+        }),
+      reset: () => set({ perUser: {} }),
     }),
     {
-      name: 'profile-extras',
+      name: 'profile-extras-v2',
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        perUser: state.perUser,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated(true);
+      },
     },
   ),
 );
+
+export function selectExtrasForUser(userId: string | undefined) {
+  return (state: ProfileExtrasState): UserProfileExtras => {
+    if (!userId) return EMPTY_USER_EXTRAS;
+    return state.perUser[userId] ?? EMPTY_USER_EXTRAS;
+  };
+}

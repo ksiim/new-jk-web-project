@@ -25,7 +25,7 @@ export type Recommendations = {
 
 // Физические ограничения, требующие инфраструктуры от места. Остальные
 // опции (cane, hearing) на текущем этапе учитываются только в сортировке.
-const HARD_ACCESSIBILITY: Array<'wheelchair' | 'ramps' | 'avoid_stairs'> = [
+const HARD_ACCESSIBILITY: ('wheelchair' | 'ramps' | 'avoid_stairs')[] = [
   'wheelchair',
   'ramps',
   'avoid_stairs',

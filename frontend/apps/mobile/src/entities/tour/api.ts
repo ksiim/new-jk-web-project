@@ -8,8 +8,11 @@ import type {
   DetailResponse,
   ListResponse,
   MockPaymentPublic,
+  TourCreatePayload,
   TourDetail,
+  TourReviewPublic,
   TourPublic,
+  TourSlotCreatePayload,
   TourSlotPublic,
 } from './types';
 
@@ -23,9 +26,22 @@ export async function fetchTour(tourId: string) {
   return data.data;
 }
 
+export async function createTour(payload: TourCreatePayload) {
+  const { data } = await http.post<DetailResponse<TourDetail>>('/tours', payload);
+  return data.data;
+}
+
 export async function fetchTourSlots(tourId: string) {
   const { data } = await http.get<DetailResponse<TourSlotPublic[]>>(
     `/tours/${tourId}/slots`,
+  );
+  return data.data;
+}
+
+export async function createTourSlot(tourId: string, payload: TourSlotCreatePayload) {
+  const { data } = await http.post<DetailResponse<TourSlotPublic>>(
+    `/tours/${tourId}/slots`,
+    payload,
   );
   return data.data;
 }
@@ -74,6 +90,11 @@ export async function createTourReview(
   tourId: string,
   payload: { rating: number; text: string; booking_id: string; accessibility_rating?: number },
 ) {
-  const { data } = await http.post(`/tours/${tourId}/reviews`, payload);
+  const { data } = await http.post<DetailResponse<TourReviewPublic>>(`/tours/${tourId}/reviews`, payload);
+  return data.data;
+}
+
+export async function fetchTourReviews(tourId: string) {
+  const { data } = await http.get<ListResponse<TourReviewPublic>>(`/tours/${tourId}/reviews`);
   return data;
 }

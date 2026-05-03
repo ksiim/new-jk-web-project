@@ -12,11 +12,11 @@ import { colors } from '../../shared/theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OnboardingInterests'>;
 
-const interests: Array<{
+const interests: {
   id: InterestId;
   label: string;
   icon: keyof typeof Feather.glyphMap;
-}> = [
+}[] = [
   { id: 'art', label: 'Искусство', icon: 'feather' },
   { id: 'coffee', label: 'Кофе', icon: 'coffee' },
   { id: 'history', label: 'История', icon: 'book-open' },

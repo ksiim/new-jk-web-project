@@ -5,6 +5,7 @@ type RouteDraftState = {
   addPoint: (id: string) => void;
   removePoint: (id: string) => void;
   hasPoint: (id: string) => boolean;
+  clear: () => void;
 };
 
 export const useRouteDraftStore = create<RouteDraftState>((set, get) => ({
@@ -18,4 +19,5 @@ export const useRouteDraftStore = create<RouteDraftState>((set, get) => ({
   removePoint: (id) =>
     set((state) => ({ ...state, poeIds: state.poeIds.filter((x) => x !== id) })),
   hasPoint: (id) => get().poeIds.includes(id),
+  clear: () => set({ poeIds: [] }),
 }));

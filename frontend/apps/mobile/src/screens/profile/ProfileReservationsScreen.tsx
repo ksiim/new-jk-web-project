@@ -2,15 +2,10 @@ import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQueryClient } from '@tanstack/react-query';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { BookingPublic } from '../../entities/tour/types';
-import {
-  useBookings,
-  useCancelBooking,
-  useConfirmMockPayment,
-  useRefundMockPayment,
-} from '../../entities/tour/hooks';
+import { useBookings, useCancelBooking, useRefundMockPayment } from '../../entities/tour/hooks';
 import type { MainStackParamList } from '../../navigation/MainNavigator';
 import { Accordion } from '../../shared/ui/Accordion';
 import { ScreenHeader } from '../../shared/ui/ScreenHeader';
@@ -22,7 +17,6 @@ export function ProfileReservationsScreen() {
   const queryClient = useQueryClient();
   const bookings = useBookings({ page: 1, limit: 50 });
   const cancel = useCancelBooking();
-  const confirmPayment = useConfirmMockPayment();
   const refundPayment = useRefundMockPayment();
 
   const refresh = async () => {
@@ -39,6 +33,12 @@ export function ProfileReservationsScreen() {
         <Text style={styles.title}>Бронирования</Text>
 
         <View style={styles.grid}>
+          {bookings.isLoading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator color={colors.textPrimary} />
+              <Text style={styles.metaText}>Загружаем бронирования...</Text>
+            </View>
+          ) : null}
           {bookings.data?.data.map((item) => (
             <ReservationCard
               key={item.id}
@@ -47,10 +47,7 @@ export function ProfileReservationsScreen() {
                 await cancel.mutateAsync({ bookingId: item.id });
                 await refresh();
               }}
-              onConfirm={async () => {
-                await confirmPayment.mutateAsync(item.id);
-                await refresh();
-              }}
+              onPay={() => navigation.navigate('TourPayment', { bookingId: item.id })}
               onRefund={async () => {
                 await refundPayment.mutateAsync(item.id);
                 await refresh();
@@ -92,14 +89,14 @@ function bookingStatusLabel(status: BookingPublic['status']): string {
 function ReservationCard({
   item,
   onCancel,
-  onConfirm,
+  onPay,
   onRefund,
   onOpen,
   onReview,
 }: {
   item: BookingPublic;
   onCancel: () => Promise<void>;
-  onConfirm: () => Promise<void>;
+  onPay: () => void;
   onRefund: () => Promise<void>;
   onOpen: () => void;
   onReview: () => void;
@@ -107,7 +104,7 @@ function ReservationCard({
   const paid = item.status === 'confirmed' || item.status === 'completed';
   const canPay = item.status === 'pending_payment';
   const canCancel = item.status === 'pending_payment' || item.status === 'confirmed';
-  const canRefund = item.status === 'confirmed' || item.status === 'completed';
+  const canRefund = item.status === 'cancelled' && item.refund_status === 'pending';
   return (
     <View style={styles.card}>
       <View style={[styles.image, styles.imagePlaceholder]}>
@@ -133,6 +130,9 @@ function ReservationCard({
         <Text style={[styles.status, paid ? styles.statusPaid : styles.statusUnpaid]}>
           {bookingStatusLabel(item.status)}
         </Text>
+        {item.refund_status ? (
+          <Text style={styles.refundStatus}>refund: {item.refund_status}</Text>
+        ) : null}
       </View>
 
       <View style={styles.actionsColumn}>
@@ -145,8 +145,8 @@ function ReservationCard({
           </Pressable>
         ) : null}
         {canPay ? (
-          <Pressable style={styles.actionBtn} onPress={onConfirm}>
-            <Text style={styles.actionBtnText}>Оплатить (mock)</Text>
+          <Pressable style={styles.actionBtn} onPress={onPay}>
+            <Text style={styles.actionBtnText}>Оплатить</Text>
           </Pressable>
         ) : null}
         {canCancel ? (
@@ -235,6 +235,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  refundStatus: {
+    fontSize: 11,
+    color: colors.textMuted,
+  },
   statusPaid: {
     color: colors.successText,
   },
@@ -262,5 +266,11 @@ const styles = StyleSheet.create({
     color: colors.errorText,
     fontSize: 12,
     marginBottom: 10,
+  },
+  loadingRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });

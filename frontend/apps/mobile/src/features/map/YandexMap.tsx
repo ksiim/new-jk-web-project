@@ -10,9 +10,9 @@ import type { YandexMapProps } from './YandexMap.types';
 export function YandexMap({ places }: YandexMapProps) {
   return (
     <View style={styles.root}>
-      <Text style={styles.title}>Нативная карта скоро появится</Text>
+      <Text style={styles.title}>Карта в демо-режиме</Text>
       <Text style={styles.subtitle}>
-        В dev-сборке подключим MapKit Яндекса. Пока места берите из списка ниже.
+        Маркеры пока не рисуем в этой сборке. Выбирайте точки из карточек ниже — они загружены с backend.
       </Text>
       <Text style={styles.count}>Найдено мест: {places.length}</Text>
     </View>

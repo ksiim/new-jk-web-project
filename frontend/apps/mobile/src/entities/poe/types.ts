@@ -25,7 +25,7 @@ export type PoePublic = {
 };
 
 export type PoeDetail = PoePublic & {
-  opening_hours: Array<{ day: string; from: string; to: string }>;
+  opening_hours: { day: string; from: string; to: string }[];
 };
 
 export type PoeReviewCreate = {

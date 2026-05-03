@@ -1,42 +1,46 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useTourReviews } from '../../entities/tour/hooks';
 import type { MainStackParamList } from '../../navigation/MainNavigator';
+import { extractApiError } from '../../shared/api/http';
 import { colors } from '../../shared/theme/colors';
 import { ScreenHeader } from '../../shared/ui/ScreenHeader';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'TourReviews'>;
 
-const demoImages = [
-  'https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=600',
-  'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=600',
-  'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=600',
-];
-
 export function TourReviewsScreen({ route }: Props) {
-  const { tourId: _tourId } = route.params;
+  const { tourId } = route.params;
+  const reviews = useTourReviews(tourId);
+
+  const avgRating = (() => {
+    const items = reviews.data?.data ?? [];
+    if (!items.length) return null;
+    return items.reduce((sum, item) => sum + item.rating, 0) / items.length;
+  })();
+
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       <ScreenHeader />
-      <Text style={styles.title}>Отзывы: Стретчинг в старом городе</Text>
-      <Text style={styles.score}>⭐ 4,9 (120 оценок)</Text>
+      <Text style={styles.title}>Отзывы о туре</Text>
+      <Text style={styles.score}>
+        {avgRating ? `⭐ ${avgRating.toFixed(1)} (${reviews.data?.data.length ?? 0} оценок)` : 'Пока без оценок'}
+      </Text>
 
-      {[1, 2, 3].map((item) => (
-        <View key={item} style={styles.card}>
-          <Text style={styles.cardTitle}>Скетчинг в старом городе</Text>
-          <Text style={styles.stars}>⭐⭐⭐⭐☆</Text>
-          <Text style={styles.body}>
-            Очень классный тур, начинается прямо у старинного фонтана. Где мостовые еще помнят стук подков.
-            Представьте: вы не просто идёте по узким улочкам старого квартала, а проживаете город.
-          </Text>
-          {item === 1 ? (
-            <View style={styles.photos}>
-              {demoImages.map((uri) => (
-                <Image key={uri} source={{ uri }} style={styles.photo} />
-              ))}
-            </View>
-          ) : null}
-          {item === 1 ? <Pressable><Text style={styles.link}>Показать фото и видео</Text></Pressable> : null}
+      {reviews.isLoading ? (
+        <ActivityIndicator color={colors.textPrimary} />
+      ) : null}
+      {reviews.isError ? (
+        <Text style={styles.errorText}>{extractApiError(reviews.error)}</Text>
+      ) : null}
+      {(reviews.data?.data.length ?? 0) === 0 && !reviews.isLoading ? (
+        <Text style={styles.emptyText}>Отзывов пока нет</Text>
+      ) : null}
+      {(reviews.data?.data ?? []).map((item) => (
+        <View key={item.id} style={styles.card}>
+          <Text style={styles.cardTitle}>Оценка: {item.rating}/5</Text>
+          <Text style={styles.body}>{item.text}</Text>
+          <Text style={styles.meta}>Дата: {new Date(item.created_at).toLocaleDateString('ru-RU')}</Text>
         </View>
       ))}
     </ScrollView>
@@ -55,9 +59,8 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   cardTitle: { color: colors.textPrimary, fontWeight: '800', fontSize: 18 / 1.15 },
-  stars: { marginTop: 6, fontSize: 22 / 1.2 },
   body: { marginTop: 6, color: colors.textPrimary, fontSize: 17 / 1.2, lineHeight: 24 },
-  photos: { marginTop: 10, flexDirection: 'row', gap: 8 },
-  photo: { width: 90, height: 90, borderRadius: 10 },
-  link: { marginTop: 8, color: colors.textPrimary, fontWeight: '600', textDecorationLine: 'underline' },
+  meta: { marginTop: 8, color: colors.textMuted, fontSize: 12 },
+  errorText: { marginTop: 12, color: colors.errorText, fontSize: 12 },
+  emptyText: { marginTop: 12, color: colors.textMuted, fontSize: 14 },
 });

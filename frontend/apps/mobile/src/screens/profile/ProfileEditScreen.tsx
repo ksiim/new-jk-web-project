@@ -1,6 +1,6 @@
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -15,7 +15,9 @@ import {
 
 import { useAuthStore } from '../../entities/auth/authStore';
 import { useProfileExtrasStore } from '../../entities/profile/profileExtrasStore';
+import { useExtrasForCurrentUser } from '../../shared/profile/useExtrasForCurrentUser';
 import type { MainStackParamList } from '../../navigation/MainNavigator';
+import { useT } from '../../shared/i18n/useT';
 import { Avatar } from '../../shared/ui/Avatar';
 import { ScreenHeader } from '../../shared/ui/ScreenHeader';
 import { SaveButton } from '../../shared/ui/SaveButton';
@@ -24,23 +26,36 @@ import { colors } from '../../shared/theme/colors';
 type Nav = NativeStackNavigationProp<MainStackParamList>;
 
 export function ProfileEditScreen() {
+  const { t } = useT();
   const navigation = useNavigation<Nav>();
   const user = useAuthStore((s) => s.user);
-  const initialFullName = useProfileExtrasStore((s) => s.fullName);
-  const initialPhone = useProfileExtrasStore((s) => s.phone);
-  const initialAvatarUri = useProfileExtrasStore((s) => s.avatarUri);
-  const setFullNameStore = useProfileExtrasStore((s) => s.setFullName);
-  const setPhoneStore = useProfileExtrasStore((s) => s.setPhone);
-  const setAvatarStore = useProfileExtrasStore((s) => s.setAvatarUri);
+  const userId = useAuthStore((s) => s.user?.id);
+  const hydrated = useProfileExtrasStore((s) => s._hasHydrated);
+  const extras = useExtrasForCurrentUser(userId);
+  const setFullNameStore = useProfileExtrasStore((s) => s.setFullNameForUser);
+  const setPhoneStore = useProfileExtrasStore((s) => s.setPhoneForUser);
+  const setAvatarStore = useProfileExtrasStore((s) => s.setAvatarForUser);
 
-  const composedName =
-    initialFullName ??
+  const composedFromServer =
+    extras.fullName ??
     (user ? `${user.surname ?? ''} ${user.name ?? ''}`.trim() : '');
 
-  const [fullName, setFullName] = useState(composedName);
-  const [email, setEmail] = useState(user?.email ?? '');
-  const [phone, setPhone] = useState(initialPhone ?? '');
-  const [avatarUri, setAvatarUri] = useState<string | null>(initialAvatarUri ?? null);
+  const [fullName, setFullName] = useState(composedFromServer);
+  const [email] = useState(user?.email ?? '');
+  const [phone, setPhone] = useState(extras.phone ?? '');
+  const [avatarUri, setAvatarUri] = useState<string | null>(extras.avatarUri ?? null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hydrated || !userId) return;
+      const name =
+        extras.fullName ??
+        (user ? `${user.surname ?? ''} ${user.name ?? ''}`.trim() : '');
+      setFullName(name);
+      setPhone(extras.phone ?? '');
+      setAvatarUri(extras.avatarUri ?? null);
+    }, [hydrated, userId, user, extras.fullName, extras.phone, extras.avatarUri]),
+  );
 
   const pickPhotoOnWeb = () => {
     if (typeof document === 'undefined') return;
@@ -50,8 +65,23 @@ export function ProfileEditScreen() {
     input.onchange = () => {
       const file = input.files?.[0];
       if (!file) return;
-      const objectUrl = URL.createObjectURL(file);
-      setAvatarUri(objectUrl);
+      if (file.size > 6 * 1024 * 1024) {
+        Alert.alert(
+          'Слишком большой файл',
+          'Выберите изображение до 6 МБ или сожмите фото перед загрузкой.',
+        );
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const r = reader.result;
+        if (typeof r === 'string') setAvatarUri(r);
+      };
+      reader.onerror = () => {
+        const objectUrl = URL.createObjectURL(file);
+        setAvatarUri(objectUrl);
+      };
+      reader.readAsDataURL(file);
     };
     input.click();
   };
@@ -80,7 +110,7 @@ export function ProfileEditScreen() {
       if (!result.canceled && result.assets.length > 0) {
         setAvatarUri(result.assets[0].uri);
       }
-    } catch (error) {
+    } catch {
       Alert.alert(
         'Не удалось открыть галерею',
         'Проверьте, что expo-image-picker установлен и перезапустите Expo.',
@@ -89,11 +119,10 @@ export function ProfileEditScreen() {
   };
 
   const handleSave = () => {
-    setFullNameStore(fullName.trim() || null);
-    setPhoneStore(phone.trim() || null);
-    setAvatarStore(avatarUri);
-    // Email в демо-режиме не шлём на бэк (нет эндпоинта смены email).
-    // Когда появится — отсюда вызов мутации.
+    if (!userId) return;
+    setFullNameStore(userId, fullName.trim() || null);
+    setPhoneStore(userId, phone.trim() || null);
+    setAvatarStore(userId, avatarUri);
     navigation.goBack();
   };
 
@@ -107,17 +136,14 @@ export function ProfileEditScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <ScreenHeader />
+        <ScreenHeader label={t('common.back')} />
 
-        <Text style={styles.title}>Редактирование{'\n'}профиля</Text>
-        <Text style={styles.hint}>
-          Поля на этом экране пока сохраняются локально на устройстве.
-        </Text>
+        <Text style={styles.title}>{t('profileEdit.title')}</Text>
 
         <View style={styles.avatarRow}>
           <Avatar
             uri={avatarUri}
-            name={fullName || composedName}
+            name={fullName || composedFromServer}
             width={112}
             height={132}
             radius={14}
@@ -125,50 +151,48 @@ export function ProfileEditScreen() {
           />
           <View style={styles.avatarActions}>
             <Pressable style={styles.avatarBtn} onPress={pickPhoto}>
-              <Text style={styles.avatarBtnText}>Изменить фото</Text>
+              <Text style={styles.avatarBtnText}>{t('profileEdit.changePhoto')}</Text>
             </Pressable>
             {avatarUri ? (
               <Pressable style={styles.avatarGhostBtn} onPress={() => setAvatarUri(null)}>
-                <Text style={styles.avatarGhostBtnText}>Удалить фото</Text>
+                <Text style={styles.avatarGhostBtnText}>{t('profileEdit.removePhoto')}</Text>
               </Pressable>
             ) : null}
           </View>
         </View>
 
         <Field
-          label="Фамилия Имя"
+          label={t('profileEdit.fullName')}
           value={fullName}
           onChangeText={setFullName}
-          placeholder="Фамилия Имя"
+          placeholder={t('profile.namePlaceholder')}
         />
         <Field
-          label="Email"
+          label={t('profileEdit.email')}
           value={email}
-          onChangeText={setEmail}
-          placeholder="example@email.com"
+          placeholder={t('profile.emailPlaceholder')}
           autoCapitalize="none"
           keyboardType="email-address"
+          editable={false}
         />
-        <Text style={styles.inlineHint}>Email берется из аккаунта и пока не изменяется на сервере.</Text>
         <Field
-          label="Номер телефона"
+          label={t('profileEdit.phone')}
           value={phone}
           onChangeText={setPhone}
-          placeholder="+7 (999) 888 - 77 - 66"
+          placeholder={t('profileEdit.phonePlaceholder')}
           keyboardType="phone-pad"
         />
-        <Text style={styles.inlineHint}>Телефон пока хранится только локально в приложении.</Text>
 
         <Pressable
           onPress={() => navigation.navigate('ProfileChangePassword')}
           style={styles.changePwd}
         >
-          <Text style={styles.changePwdText}>Изменить пароль</Text>
+          <Text style={styles.changePwdText}>{t('profileEdit.changePassword')}</Text>
         </Pressable>
       </ScrollView>
 
       <View style={styles.footer}>
-        <SaveButton onPress={handleSave} />
+        <SaveButton title={t('common.save')} onPress={handleSave} disabled={!userId} />
       </View>
     </KeyboardAvoidingView>
   );
@@ -177,10 +201,11 @@ export function ProfileEditScreen() {
 type FieldProps = {
   label: string;
   value: string;
-  onChangeText: (v: string) => void;
+  onChangeText?: (v: string) => void;
   placeholder?: string;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   keyboardType?: 'default' | 'email-address' | 'phone-pad';
+  editable?: boolean;
 };
 
 function Field({
@@ -190,18 +215,20 @@ function Field({
   placeholder,
   autoCapitalize,
   keyboardType,
+  editable = true,
 }: FieldProps) {
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, !editable && styles.inputReadonly]}
         value={value}
-        onChangeText={onChangeText}
+        onChangeText={onChangeText ?? (() => {})}
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
         autoCapitalize={autoCapitalize}
         keyboardType={keyboardType}
+        editable={editable}
       />
       <View style={styles.line} />
     </View>
@@ -224,12 +251,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginTop: 4,
     marginBottom: 24,
-  },
-  hint: {
-    marginTop: -12,
-    marginBottom: 14,
-    fontSize: 12,
-    color: colors.textMuted,
   },
   avatarRow: {
     flexDirection: 'row',
@@ -281,15 +302,12 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     paddingVertical: 6,
   },
+  inputReadonly: {
+    color: colors.textMuted,
+  },
   line: {
     height: 1,
     backgroundColor: colors.line,
-  },
-  inlineHint: {
-    marginTop: -12,
-    marginBottom: 14,
-    fontSize: 11,
-    color: colors.textMuted,
   },
   changePwd: {
     marginTop: 4,

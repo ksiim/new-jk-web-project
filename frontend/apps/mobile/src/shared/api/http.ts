@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, isAxiosError } from 'axios';
 
 import { useAuthStore } from '../../entities/auth/authStore';
 import { rootNavigationRef } from '../../navigation/navigationRef';
@@ -6,7 +6,7 @@ import { rootNavigationRef } from '../../navigation/navigationRef';
 export type ApiErrorPayload = {
   code?: string;
   message?: string;
-  detail?: string | Array<{ msg: string }>;
+  detail?: string | { msg: string }[];
   details?: unknown;
 };
 
@@ -28,7 +28,9 @@ http.interceptors.request.use((config) => {
 http.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiErrorPayload>) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    // Только 401 = сессия недействительна. 403 часто значит «нет права на ресурс»,
+    // а не «нужен новый токен» — иначе любой 403 сбрасывает auth и локальный профиль.
+    if (error.response?.status === 401) {
       const { token, logout } = useAuthStore.getState();
       if (token) {
         logout();
@@ -42,7 +44,7 @@ http.interceptors.response.use(
 );
 
 export function extractApiError(error: unknown): string {
-  if (axios.isAxiosError<ApiErrorPayload>(error)) {
+  if (isAxiosError<ApiErrorPayload>(error)) {
     const data = error.response?.data;
     if (data) {
       if (typeof data.detail === 'string') return data.detail;

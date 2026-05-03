@@ -50,6 +50,44 @@ export type TourPublic = {
   accessibility: TourAccessibility;
 };
 
+export type TourFormat =
+  | 'offline_guided'
+  | 'self_guided'
+  | 'audio_guide'
+  | 'private_tour'
+  | 'group_tour';
+
+export type TourCreatePayload = {
+  title: string;
+  description: string;
+  city_id: string;
+  guide_id: string;
+  guide_name: string;
+  guide_avatar_url?: string | null;
+  guide_rating?: number;
+  guide_reviews_count?: number;
+  guide_bio?: string | null;
+  format: TourFormat;
+  language?: string;
+  duration_minutes: number;
+  group_size_max?: number;
+  price_amount: number;
+  price_currency?: string;
+  tags?: string[];
+  meeting_lat: number;
+  meeting_lng: number;
+  meeting_address?: string | null;
+  wheelchair_accessible?: boolean;
+  avoid_stairs_possible?: boolean;
+  rating?: number;
+  reviews_count?: number;
+  cover_image_url?: string | null;
+  images?: string[];
+  cancellation_policy?: string;
+  route_distance_meters?: number;
+  route_points_count?: number;
+};
+
 export type TourDetail = {
   id: string;
   title: string;
@@ -71,6 +109,17 @@ export type TourDetail = {
   cancellation_policy: string;
 };
 
+export type TourReviewPublic = {
+  id: string;
+  tour_id: string;
+  booking_id: string;
+  user_id: string;
+  rating: number;
+  text: string;
+  created_at: string;
+  accessibility_rating?: number | null;
+};
+
 export type TourSlotPublic = {
   id: string;
   starts_at: string;
@@ -78,6 +127,14 @@ export type TourSlotPublic = {
   available_capacity: number;
   price: Price;
   status: 'available' | 'sold_out' | 'cancelled';
+};
+
+export type TourSlotCreatePayload = {
+  starts_at: string;
+  ends_at: string;
+  available_capacity: number;
+  price: Price;
+  status?: TourSlotPublic['status'];
 };
 
 export type BookingCreatePayload = {
@@ -122,6 +179,7 @@ export type BookingPublic = {
   };
   participants_count: number;
   status: BookingStatus;
+  refund_status?: 'not_required' | 'pending' | 'refunded';
   price_total: Price;
 };
 

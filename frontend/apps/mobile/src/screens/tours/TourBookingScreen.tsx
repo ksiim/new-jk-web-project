@@ -3,63 +3,147 @@ import { Feather } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { useTour, useTourSlots } from '../../entities/tour/hooks';
+import { useCreateBooking, useTour, useTourSlots } from '../../entities/tour/hooks';
 import type { MainStackParamList } from '../../navigation/MainNavigator';
+import { extractApiError } from '../../shared/api/http';
 import { colors } from '../../shared/theme/colors';
 import { ScreenHeader } from '../../shared/ui/ScreenHeader';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'TourBooking'>;
 
+function formatDateKey(value: string) {
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function formatSlotDate(value: string) {
+  return new Date(value).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    weekday: 'short',
+  });
+}
+
 export function TourBookingScreen({ route, navigation }: Props) {
   const { tourId } = route.params;
   const tour = useTour(tourId);
   const slots = useTourSlots(tourId);
+  const createBooking = useCreateBooking();
   const [participants, setParticipants] = useState('1');
   const [comment, setComment] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
-  const [pickedTime, setPickedTime] = useState('18:00');
-  const firstSlot = slots.data?.[0];
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+
+  const availableSlots = useMemo(
+    () =>
+      (slots.data ?? [])
+        .filter((slot) => slot.status === 'available' && slot.available_capacity > 0)
+        .sort(
+          (a, b) =>
+            new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
+        ),
+    [slots.data],
+  );
+  const effectiveSlotId = selectedSlotId ?? availableSlots[0]?.id ?? null;
+  const selectedSlot = useMemo(
+    () => availableSlots.find((slot) => slot.id === effectiveSlotId) ?? availableSlots[0] ?? null,
+    [availableSlots, effectiveSlotId],
+  );
+  const selectedDateKey = selectedSlot ? formatDateKey(selectedSlot.starts_at) : null;
+  const dateOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return availableSlots.filter((slot) => {
+      const key = formatDateKey(slot.starts_at);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [availableSlots]);
+  const timeOptions = useMemo(
+    () =>
+      selectedDateKey
+        ? availableSlots.filter((slot) => formatDateKey(slot.starts_at) === selectedDateKey)
+        : availableSlots,
+    [availableSlots, selectedDateKey],
+  );
+  const participantsCount = Math.max(1, Number.parseInt(participants, 10) || 1);
+  const maxCapacity = selectedSlot?.available_capacity ?? 0;
+  const participantsOverflow = maxCapacity > 0 && participantsCount > maxCapacity;
+  const unitPrice = selectedSlot?.price.amount ?? tour.data?.price.amount ?? 0;
 
   const totalPrice = useMemo(() => {
-    const count = Number(participants) || 1;
-    return (tour.data?.price.amount ?? 0) * Math.max(1, count);
-  }, [participants, tour.data?.price.amount]);
+    return unitPrice * participantsCount;
+  }, [participantsCount, unitPrice]);
+
+  const slotDate = selectedSlot ? formatSlotDate(selectedSlot.starts_at) : 'Нет слотов';
+  const slotTime = selectedSlot
+    ? new Date(selectedSlot.starts_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    : '--:--';
+
+  const handleBook = async (next: 'payment' | 'defer') => {
+    if (!selectedSlot || participantsOverflow || createBooking.isPending) return;
+    const idempotency_key = `${tourId}-${selectedSlot.id}-${Date.now()}`;
+    const booking = await createBooking.mutateAsync({
+      tour_id: tourId,
+      slot_id: selectedSlot.id,
+      participants_count: participantsCount,
+      comment: comment.trim() || undefined,
+      idempotency_key,
+    });
+    if (next === 'payment') {
+      navigation.navigate('TourPayment', { bookingId: booking.id });
+      return;
+    }
+    navigation.navigate('TourDeferred', { tourId, bookingId: booking.id });
+  };
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       <ScreenHeader />
       <Text style={styles.title}>Бронирование: {tour.data?.title ?? 'Тур'}</Text>
+      {slots.isLoading ? (
+        <Text style={styles.meta}>Загружаем доступные слоты...</Text>
+      ) : null}
+      {slots.isError ? (
+        <Text style={styles.errorText}>{extractApiError(slots.error)}</Text>
+      ) : null}
 
       <View style={styles.row}>
         <Text style={styles.label}>Дата:</Text>
         <Pressable style={styles.valueChip} onPress={() => setCalendarOpen(true)}>
-          <Text style={styles.valueText}>
-            {firstSlot ? new Date(firstSlot.starts_at).toLocaleDateString('ru-RU') : '23.04.2026'}
-          </Text>
+          <Text style={styles.valueText}>{slotDate}</Text>
         </Pressable>
       </View>
 
       <View style={styles.row}>
         <Text style={styles.label}>Начало:</Text>
         <Pressable style={styles.valueChip} onPress={() => setTimeOpen((v) => !v)}>
-          <Text style={styles.valueText}>{pickedTime}</Text>
+          <Text style={styles.valueText}>{slotTime}</Text>
           <Feather name="chevron-down" size={16} color={colors.textMuted} />
         </Pressable>
         {timeOpen ? (
           <View style={styles.timePopover}>
-            {['16:00', '17:00', '18:00', '19:00'].map((slot) => (
+            {timeOptions.map((slot) => {
+              const label = new Date(slot.starts_at).toLocaleTimeString('ru-RU', {
+                hour: '2-digit',
+                minute: '2-digit',
+              });
+              return (
               <Pressable
-                key={slot}
+                key={slot.id}
                 style={styles.timeOption}
                 onPress={() => {
-                  setPickedTime(slot);
+                  setSelectedSlotId(slot.id);
                   setTimeOpen(false);
                 }}
               >
-                <Text style={styles.timeOptionText}>{slot}</Text>
+                <Text style={styles.timeOptionText}>{label}</Text>
               </Pressable>
-            ))}
+              );
+            })}
+            {timeOptions.length === 0 ? (
+              <Text style={styles.timeOptionText}>Доступных слотов нет</Text>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -69,13 +153,18 @@ export function TourBookingScreen({ route, navigation }: Props) {
       <View style={styles.row}>
         <Text style={styles.label}>Количество человек:</Text>
         <TextInput
-          value={participants}
-          onChangeText={setParticipants}
+          value={String(participantsCount)}
+          onChangeText={(value) => setParticipants(value.replace(/[^0-9]/g, '').slice(0, 2))}
           keyboardType="number-pad"
           style={styles.smallInput}
         />
       </View>
-      <Text style={styles.meta}>Осталось {firstSlot?.available_capacity ?? 6} мест</Text>
+      <Text style={styles.meta}>
+        Осталось {selectedSlot?.available_capacity ?? 0} мест
+      </Text>
+      {participantsOverflow ? (
+        <Text style={styles.errorText}>Количество участников превышает доступные места в слоте</Text>
+      ) : null}
 
       <Text style={[styles.label, { marginTop: 10 }]}>Добавить комментарий:</Text>
       <TextInput
@@ -90,37 +179,61 @@ export function TourBookingScreen({ route, navigation }: Props) {
       <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>Итого:</Text>
         <Text style={styles.totalValue}>
-          1 x {(totalPrice || 2500).toLocaleString('ru-RU')} р.
+          {participantsCount} x {unitPrice.toLocaleString('ru-RU')} = {totalPrice.toLocaleString('ru-RU')} р.
         </Text>
       </View>
 
-      <Pressable style={styles.primaryBtn} onPress={() => navigation.navigate('TourDeferred', { tourId })}>
+      <Pressable
+        style={[
+          styles.primaryBtn,
+          (!selectedSlot || participantsOverflow || createBooking.isPending) && styles.disabledBtn,
+        ]}
+        disabled={!selectedSlot || participantsOverflow || createBooking.isPending}
+        onPress={() => handleBook('payment')}
+      >
         <Text style={styles.primaryBtnText}>Перейти к оплате</Text>
       </Pressable>
-      <Pressable style={[styles.primaryBtn, styles.secondaryBtn]} onPress={() => navigation.navigate('TourDeferred', { tourId })}>
+      <Pressable
+        style={[
+          styles.primaryBtn,
+          styles.secondaryBtn,
+          (!selectedSlot || participantsOverflow || createBooking.isPending) && styles.disabledBtn,
+        ]}
+        disabled={!selectedSlot || participantsOverflow || createBooking.isPending}
+        onPress={() => handleBook('defer')}
+      >
         <Text style={styles.primaryBtnText}>Оплачу позже</Text>
       </Pressable>
+      {createBooking.isError ? (
+        <Text style={styles.errorText}>{extractApiError(createBooking.error)}</Text>
+      ) : null}
 
       <Modal visible={calendarOpen} transparent animationType="fade" onRequestClose={() => setCalendarOpen(false)}>
         <Pressable style={styles.overlay} onPress={() => setCalendarOpen(false)}>
           <View style={styles.calendarCard}>
             <View style={styles.calendarHead}>
-              <Feather name="chevron-left" size={18} color={colors.textPrimary} />
-              <Text style={styles.calendarTitle}>Апрель 2021</Text>
-              <Feather name="chevron-right" size={18} color={colors.textPrimary} />
+              <Text style={styles.calendarTitle}>Доступные даты</Text>
             </View>
-            <View style={styles.weekRow}>
-              {['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'].map((d) => (
-                <Text key={d} style={styles.weekLabel}>{d}</Text>
-              ))}
-            </View>
-            <View style={styles.daysGrid}>
-              {['29', '30', '31', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '1', '2'].map((d, i) => (
-                <Text key={`${d}-${i}`} style={[styles.day, d === '23' && styles.dayActive]}>
-                  {d}
-                </Text>
-              ))}
-            </View>
+            {dateOptions.length === 0 ? (
+              <Text style={styles.emptyText}>Слотов пока нет</Text>
+            ) : null}
+            {dateOptions.map((slot) => {
+              const active = selectedDateKey === formatDateKey(slot.starts_at);
+              return (
+                <Pressable
+                  key={formatDateKey(slot.starts_at)}
+                  style={[styles.dateOption, active && styles.dateOptionActive]}
+                  onPress={() => {
+                    setSelectedSlotId(slot.id);
+                    setCalendarOpen(false);
+                  }}
+                >
+                  <Text style={[styles.dateOptionText, active && styles.dateOptionTextActive]}>
+                    {formatSlotDate(slot.starts_at)}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </Pressable>
       </Modal>
@@ -178,6 +291,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryBtn: { backgroundColor: colors.tileSage },
+  disabledBtn: { opacity: 0.5 },
   primaryBtnText: { color: colors.white, fontSize: 32 / 2, fontWeight: '700' },
   timePopover: {
     position: 'absolute',
@@ -207,9 +321,20 @@ const styles = StyleSheet.create({
   },
   calendarHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   calendarTitle: { color: colors.textPrimary, fontSize: 28 / 2, fontWeight: '700' },
-  weekRow: { marginTop: 10, flexDirection: 'row', justifyContent: 'space-between' },
-  weekLabel: { width: 36, textAlign: 'center', color: colors.textSubtle, fontSize: 12 },
-  daysGrid: { marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 },
-  day: { width: `${100 / 7}%`, textAlign: 'center', color: colors.textPrimary, fontSize: 16 },
-  dayActive: { color: '#E44A3D', fontWeight: '800' },
+  dateOption: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+  },
+  dateOptionActive: {
+    borderColor: colors.accentButton,
+    backgroundColor: colors.accentButton,
+  },
+  dateOptionText: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  dateOptionTextActive: { color: colors.white },
+  emptyText: { marginTop: 10, color: colors.textMuted, fontSize: 13 },
+  errorText: { marginTop: 8, color: colors.errorText, fontSize: 12 },
 });

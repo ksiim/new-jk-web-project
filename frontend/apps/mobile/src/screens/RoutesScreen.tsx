@@ -3,13 +3,27 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { usePreferencesStore } from '../entities/preferences/preferencesStore';
+import { usePoes } from '../entities/poe/hooks';
 import { useActiveRouteStore } from '../entities/route/activeRouteStore';
+import { useRouteHistoryStore } from '../entities/route/routeHistoryStore';
+import { useRouteDraftStore } from '../entities/route/routeDraftStore';
 import { useGenerateRoute } from '../entities/route/hooks';
 import { EKATERINBURG_CENTER } from '../entities/place/places';
 import type { MainStackParamList } from '../navigation/MainNavigator';
 import { extractApiError } from '../shared/api/http';
 import { colors } from '../shared/theme/colors';
 import { SaveButton } from '../shared/ui/SaveButton';
+
+function routeStatusLabel(status: string) {
+  const map: Record<string, string> = {
+    draft: 'черновик',
+    saved: 'сохранен',
+    in_progress: 'в пути',
+    completed: 'завершен',
+    archived: 'архив',
+  };
+  return map[status] ?? status;
+}
 
 export function RoutesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
@@ -21,6 +35,11 @@ export function RoutesScreen() {
   const budgetMax = usePreferencesStore((s) => s.budgetMax);
   const setActiveRoute = useActiveRouteStore((s) => s.setRoute);
   const activeRoute = useActiveRouteStore((s) => s.route);
+  const routeHistory = useRouteHistoryStore((s) => s.routes);
+  const addRouteToHistory = useRouteHistoryStore((s) => s.addRoute);
+  const draftPoeIds = useRouteDraftStore((s) => s.poeIds);
+  const clearDraftRoute = useRouteDraftStore((s) => s.clear);
+  const poeCatalog = usePoes({ city_id: 'ekb', page: 1, limit: 100 });
   const generate = useGenerateRoute();
 
   const generateFromPrefs = async () => {
@@ -33,10 +52,18 @@ export function RoutesScreen() {
     const budgetLevel =
       budgetMax === null ? 'medium' : budgetMax <= 3000 ? 'low' : budgetMax <= 8000 ? 'medium' : 'high';
     const pace = tempo ?? 'medium';
+    const draftTagSet = new Set<string>();
+    const selectedDraftPoes = (poeCatalog.data?.data ?? []).filter((poe) => draftPoeIds.includes(poe.id));
+    for (const poe of selectedDraftPoes) {
+      for (const tag of poe.tags) {
+        draftTagSet.add(tag);
+      }
+    }
+    const mergedInterests = Array.from(new Set([...interests, ...Array.from(draftTagSet)]));
 
     const payload = {
       city_id: 'ekb',
-      interests,
+      interests: mergedInterests,
       start_location: {
         lat: EKATERINBURG_CENTER.lat,
         lng: EKATERINBURG_CENTER.lng,
@@ -54,7 +81,9 @@ export function RoutesScreen() {
 
     try {
       const route = await generate.mutateAsync(payload);
-      setActiveRoute(route);
+      const savedRoute = { ...route, status: 'saved' as const };
+      setActiveRoute(savedRoute);
+      addRouteToHistory(savedRoute);
       navigation.navigate('ActiveRoute');
       return;
     } catch (error) {
@@ -81,7 +110,9 @@ export function RoutesScreen() {
             need_rest_points: false,
           },
         });
-        setActiveRoute(relaxedRoute);
+        const savedRelaxedRoute = { ...relaxedRoute, status: 'saved' as const };
+        setActiveRoute(savedRelaxedRoute);
+        addRouteToHistory(savedRelaxedRoute);
         navigation.navigate('ActiveRoute');
       } catch (relaxedError) {
         console.warn('Route generation failed after relaxed fallback', extractApiError(relaxedError));
@@ -107,6 +138,14 @@ export function RoutesScreen() {
         <Text style={styles.generatorMeta}>
           На основе интересов, доступности и времени из вашего профиля.
         </Text>
+        {draftPoeIds.length > 0 ? (
+          <View style={styles.draftRow}>
+            <Text style={styles.draftMeta}>Добавлено точек из карты: {draftPoeIds.length}</Text>
+            <Pressable onPress={clearDraftRoute}>
+              <Text style={styles.clearText}>Очистить</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <SaveButton
           title="Сгенерировать"
           onPress={generateFromPrefs}
@@ -132,6 +171,28 @@ export function RoutesScreen() {
         </View>
       ) : (
         <Text style={styles.emptyText}>Пока нет сгенерированного маршрута</Text>
+      )}
+
+      <Text style={styles.subTitle}>Мои маршруты</Text>
+      {routeHistory.length === 0 ? (
+        <Text style={styles.emptyText}>История маршрутов пока пуста</Text>
+      ) : (
+        routeHistory.map((route) => (
+          <Pressable
+            key={route.id}
+            style={styles.historyCard}
+            onPress={() => {
+              setActiveRoute(route);
+              navigation.navigate('ActiveRoute');
+            }}
+          >
+            <Text style={styles.historyTitle}>{route.title}</Text>
+            <Text style={styles.historyMeta}>
+              {(route.distance_meters / 1000).toFixed(1)} км • {Math.round(route.duration_minutes / 60)} ч • {route.points.length} точек
+            </Text>
+            <Text style={styles.historyStatus}>{routeStatusLabel(route.status)}</Text>
+          </Pressable>
+        ))
       )}
     </ScrollView>
   );
@@ -185,6 +246,23 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
   },
+  draftRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  draftMeta: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  clearText: {
+    color: colors.errorText,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   errorText: {
     color: colors.errorText,
     fontSize: 12,
@@ -214,5 +292,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 12,
   },
+  historyCard: {
+    marginBottom: 8,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.white,
+  },
+  historyTitle: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  historyMeta: {
+    marginTop: 4,
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  historyStatus: {
+    marginTop: 4,
+    color: colors.successText,
+    fontSize: 12,
+    fontWeight: '700',
+  },
 });
-

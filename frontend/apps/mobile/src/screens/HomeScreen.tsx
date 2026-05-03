@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuthStore } from '../entities/auth/authStore';
+import { useExtrasForCurrentUser } from '../shared/profile/useExtrasForCurrentUser';
 import {
   nearbyItems,
   quickScenarios,
@@ -27,11 +28,13 @@ export function HomeScreen() {
     useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
+  const userId = useAuthStore((s) => s.user?.id);
+  const extras = useExtrasForCurrentUser(userId);
 
-  const firstName = getGreetingName(
-    user ? `${user.surname ?? ''} ${user.name ?? ''}`.trim() : undefined,
-    'гость',
-  );
+  const serverFullName = user ? `${user.surname ?? ''} ${user.name ?? ''}`.trim() : '';
+  const composedName = extras.fullName ?? serverFullName;
+
+  const firstName = getGreetingName(composedName || undefined, 'гость');
 
   const activeRoute = routes.find((r) => r.status === 'active');
   const plannedRoutes = routes.filter((r) => r.status === 'planned');

@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { usePoes } from '../../entities/poe/hooks';
 import { useActiveRouteStore } from '../../entities/route/activeRouteStore';
+import { useRouteHistoryStore } from '../../entities/route/routeHistoryStore';
 import type { MainStackParamList } from '../../navigation/MainNavigator';
 import { colors } from '../../shared/theme/colors';
 import { ScreenHeader } from '../../shared/ui/ScreenHeader';
@@ -13,7 +14,9 @@ export function ActiveRouteScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const route = useActiveRouteStore((s) => s.route);
   const setRoute = useActiveRouteStore((s) => s.setRoute);
+  const updateRoute = useRouteHistoryStore((s) => s.updateRoute);
   const [search, setSearch] = useState('');
+  const [selectedPoeId, setSelectedPoeId] = useState<string | null>(null);
   const poes = usePoes({ city_id: 'ekb', page: 1, limit: 100 });
 
   const poeById = useMemo(() => {
@@ -31,8 +34,12 @@ export function ActiveRouteScreen() {
   const visiblePoints = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return route?.points ?? [];
-    return (route?.points ?? []).filter((point) => point.poe_id.toLowerCase().includes(query));
-  }, [route?.points, search]);
+    return (route?.points ?? []).filter((point) => {
+      const poe = poeById.get(point.poe_id);
+      const haystack = `${point.poe_id} ${poe?.title ?? ''} ${poe?.address ?? ''}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [poeById, route?.points, search]);
 
   if (!route) {
     return (
@@ -55,7 +62,7 @@ export function ActiveRouteScreen() {
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Поиск по ID точки"
+          placeholder="Поиск по названию или адресу"
           placeholderTextColor={styles.searchText.color}
           style={styles.searchInput}
         />
@@ -87,7 +94,14 @@ export function ActiveRouteScreen() {
                   : '📍';
 
           return (
-            <View key={`${point.poe_id}-${point.order}-${index}`} style={styles.pointRow}>
+            <Pressable
+              key={`${point.poe_id}-${point.order}-${index}`}
+              style={[styles.pointRow, selectedPoeId === point.poe_id && styles.pointRowSelected]}
+              onPress={() => {
+                setSelectedPoeId(point.poe_id);
+                navigation.navigate('PoeDetail', { poeId: point.poe_id });
+              }}
+            >
               <View style={styles.pointTextWrap}>
                 <Text style={styles.pointIndex}>
                   {index + 1}. {title}
@@ -108,7 +122,7 @@ export function ActiveRouteScreen() {
                 </Text>
                 <Text style={styles.pointRating}>#{index + 1}</Text>
               </View>
-            </View>
+            </Pressable>
           );
         })}
         {!visiblePoints.length ? (
@@ -118,6 +132,7 @@ export function ActiveRouteScreen() {
         <Pressable
           style={styles.primaryButton}
           onPress={() => {
+            updateRoute({ ...route, status: 'in_progress' });
             navigation.goBack();
           }}
         >
@@ -126,6 +141,7 @@ export function ActiveRouteScreen() {
         <Pressable
           style={[styles.primaryButton, styles.secondaryButton]}
           onPress={() => {
+            updateRoute({ ...route, status: 'completed' });
             setRoute(null);
             navigation.navigate('Tabs');
           }}
@@ -194,6 +210,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 18,
     gap: 12,
+    borderRadius: 8,
+    padding: 4,
+  },
+  pointRowSelected: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
   pointTextWrap: {
     flex: 1,

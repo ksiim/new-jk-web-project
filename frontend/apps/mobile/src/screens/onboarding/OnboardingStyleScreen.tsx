@@ -20,7 +20,7 @@ import { colors } from '../../shared/theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OnboardingStyle'>;
 
-const tempoOptions: Array<{ id: Tempo; label: string }> = [
+const tempoOptions: { id: Tempo; label: string }[] = [
   { id: 'slow', label: 'Медленно' },
   { id: 'medium', label: 'Средне' },
   { id: 'fast', label: 'Быстро' },

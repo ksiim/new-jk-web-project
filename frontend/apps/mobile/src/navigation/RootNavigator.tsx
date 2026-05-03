@@ -23,7 +23,7 @@ export type RootStackParamList = {
   OnboardingAccessibility: undefined;
   OnboardingStyle: undefined;
   OnboardingComplete: undefined;
-  Main: undefined;
+  Main: { startInGuide?: boolean } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

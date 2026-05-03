@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -8,6 +8,7 @@ import {
   type LanguageId,
   useSettingsStore,
 } from '../../entities/settings/settingsStore';
+import { useT } from '../../shared/i18n/useT';
 import { ScreenHeader } from '../../shared/ui/ScreenHeader';
 import { SaveButton } from '../../shared/ui/SaveButton';
 import { colors } from '../../shared/theme/colors';
@@ -15,13 +16,18 @@ import { colors } from '../../shared/theme/colors';
 const languageOrder: LanguageId[] = ['en', 'be', 'kk', 'zh', 'ru'];
 
 export function ProfileLanguageScreen() {
+  const { t } = useT();
   const navigation = useNavigation();
   const current = useSettingsStore((s) => s.language);
   const commit = useSettingsStore((s) => s.setLanguage);
   const [selected, setSelected] = useState<LanguageId>(current);
 
+  useEffect(() => {
+    setSelected(current);
+  }, [current]);
+
   const handleSave = () => {
-    if (selected !== current) commit(selected);
+    commit(selected);
     navigation.goBack();
   };
 
@@ -31,8 +37,8 @@ export function ProfileLanguageScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <ScreenHeader />
-        <Text style={styles.title}>Язык</Text>
+        <ScreenHeader label={t('common.back')} />
+        <Text style={styles.title}>{t('language.title')}</Text>
 
         <View style={styles.list}>
           {languageOrder.map((id) => {
@@ -59,7 +65,7 @@ export function ProfileLanguageScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <SaveButton onPress={handleSave} />
+        <SaveButton title={t('common.save')} onPress={handleSave} />
       </View>
     </View>
   );

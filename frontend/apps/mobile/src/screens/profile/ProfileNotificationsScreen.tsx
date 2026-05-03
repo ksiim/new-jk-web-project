@@ -13,7 +13,7 @@ import { SaveButton } from '../../shared/ui/SaveButton';
 import { Toggle } from '../../shared/ui/Toggle';
 import { colors } from '../../shared/theme/colors';
 
-const rows: Array<{ key: NotificationKey; label: string }> = [
+const rows: { key: NotificationKey; label: string }[] = [
   { key: 'promos', label: 'Получение рекламных рассылок' },
   { key: 'reminders', label: 'Получение напоминаний о записях' },
   { key: 'route', label: 'Строка маршрута' },

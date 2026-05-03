@@ -4,14 +4,18 @@ import {
   cancelBooking,
   confirmMockPayment,
   createBooking,
+  createTour,
   createTourReview,
+  createTourSlot,
   fetchBookingDetail,
   fetchBookings,
   fetchTour,
+  fetchTourReviews,
   fetchTours,
   fetchTourSlots,
   refundMockPayment,
 } from './api';
+import type { TourCreatePayload, TourSlotCreatePayload } from './types';
 
 export function useTours(params?: Record<string, unknown>) {
   return useQuery({
@@ -30,12 +34,30 @@ export function useTour(tourId: string | null) {
   });
 }
 
+export function useCreateTour() {
+  return useMutation({
+    mutationFn: (payload: TourCreatePayload) => createTour(payload),
+  });
+}
+
 export function useTourSlots(tourId: string | null) {
   return useQuery({
     queryKey: ['tours', 'slots', tourId],
     queryFn: () => fetchTourSlots(tourId as string),
     enabled: Boolean(tourId),
     staleTime: 30_000,
+  });
+}
+
+export function useCreateTourSlot() {
+  return useMutation({
+    mutationFn: ({
+      tourId,
+      payload,
+    }: {
+      tourId: string;
+      payload: TourSlotCreatePayload;
+    }) => createTourSlot(tourId, payload),
   });
 }
 
@@ -102,5 +124,14 @@ export function useCreateTourReview() {
         booking_id: bookingId,
         accessibility_rating: accessibilityRating,
       }),
+  });
+}
+
+export function useTourReviews(tourId: string | null) {
+  return useQuery({
+    queryKey: ['tours', 'reviews', tourId],
+    queryFn: () => fetchTourReviews(tourId as string),
+    enabled: Boolean(tourId),
+    staleTime: 30_000,
   });
 }

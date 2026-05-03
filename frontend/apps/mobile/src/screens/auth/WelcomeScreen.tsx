@@ -1,6 +1,14 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  type TextStyle,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { RootStackParamList } from '../../navigation/RootNavigator';
@@ -99,7 +107,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.white,
     lineHeight: 34,
-    textShadow: '0px 2px 8px rgba(0,0,0,0.55)',
+    ...(Platform.OS === 'web'
+      ? ({ textShadow: '0 2px 8px rgba(0,0,0,0.55)' } as TextStyle)
+      : {
+          textShadowColor: 'rgba(0,0,0,0.55)',
+          textShadowOffset: { width: 0, height: 2 },
+          textShadowRadius: 8,
+        }),
   },
   subline: {
     marginTop: 12,
@@ -107,7 +121,13 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: colors.white,
     opacity: 0.95,
-    textShadow: '0px 1px 6px rgba(0,0,0,0.55)',
+    ...(Platform.OS === 'web'
+      ? ({ textShadow: '0 1px 6px rgba(0,0,0,0.55)' } as TextStyle)
+      : {
+          textShadowColor: 'rgba(0,0,0,0.55)',
+          textShadowOffset: { width: 0, height: 1 },
+          textShadowRadius: 6,
+        }),
   },
   cta: {
     alignSelf: 'center',

@@ -32,7 +32,8 @@ export function SplashScreen({ navigation }: Props) {
     const id = setTimeout(() => {
       if (isAuthenticated) {
         if (onboardingCompleted) {
-          navigation.replace('Main');
+          const startInGuide = me.data?.role === 'employee' || me.data?.role === 'admin';
+          navigation.replace('Main', { startInGuide });
         } else {
           navigation.replace('OnboardingInterests');
         }
@@ -44,7 +45,7 @@ export function SplashScreen({ navigation }: Props) {
     }, MIN_SPLASH_MS);
 
     return () => clearTimeout(id);
-  }, [ready, isAuthenticated, hasSeenWelcome, onboardingCompleted, navigation]);
+  }, [ready, isAuthenticated, hasSeenWelcome, onboardingCompleted, navigation, me.data?.role]);
 
   return (
     <View style={styles.root}>

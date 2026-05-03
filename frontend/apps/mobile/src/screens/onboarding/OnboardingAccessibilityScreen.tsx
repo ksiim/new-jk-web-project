@@ -15,7 +15,7 @@ type Props = NativeStackScreenProps<
   'OnboardingAccessibility'
 >;
 
-const options: Array<{ id: AccessibilityId; label: string }> = [
+const options: { id: AccessibilityId; label: string }[] = [
   { id: 'wheelchair', label: 'Передвигаюсь с коляской' },
   { id: 'cane', label: 'Использую трость' },
   { id: 'ramps', label: 'Нужны пандусы' },

@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import axios from 'axios';
+import { isAxiosError } from 'axios';
 import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -21,7 +21,7 @@ import { colors } from '../../shared/theme/colors';
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 function translateLoginError(error: unknown): string {
-  if (axios.isAxiosError(error)) {
+  if (isAxiosError(error)) {
     if (!error.response) {
       return 'Нет соединения с сервером. Проверьте интернет.';
     }
