@@ -17,7 +17,7 @@ from src.app.service.booking import (
 
 
 class FakeBookingRepository:
-    def __init__(self, *, tour=None, slot=None, booking=None):
+    def __init__(self, tour=None, slot=None, booking=None):
         self.tour = tour
         self.slot = slot
         self.booking = booking
@@ -33,7 +33,7 @@ class FakeBookingRepository:
     async def get_by_id(self, booking_id: str):
         return self.booking if self.booking and self.booking.id == booking_id else None
 
-    async def get_by_idempotency_key(self, *, user_id, idempotency_key):
+    async def get_by_idempotency_key(self, user_id, idempotency_key):
         if (
             self.booking
             and self.booking.user_id == user_id
@@ -42,7 +42,7 @@ class FakeBookingRepository:
             return self.booking
         return None
 
-    async def add_booking_with_slot_update(self, *, booking, slot):
+    async def add_booking_with_slot_update(self, booking, slot):
         if slot.status != SlotStatus.AVAILABLE or slot.available_capacity < booking.participants_count:
             return None
         slot.available_capacity -= booking.participants_count
@@ -53,16 +53,63 @@ class FakeBookingRepository:
         self.saved_booking = booking
         return booking
 
-    async def save_booking_and_slot(self, *, booking, slot=None):
+    async def save_booking_and_slot(self, booking, slot=None):
         self.booking = booking
         self.saved_booking = booking
         self.saved_slot = slot
         return booking
 
-    async def list_user_bookings(self, *, user_id, skip, limit, status=None):
+    async def list_user_bookings(self, user_id, skip, limit, status=None):
         bookings = [self.booking] if self.booking and self.booking.user_id == user_id else []
         if status is not None:
             bookings = [item for item in bookings if item.status == status]
+        return bookings[skip : skip + limit], len(bookings)
+
+    async def list_guide_bookings(
+        self,
+        *,
+        guide_id,
+        skip,
+        limit,
+        status=None,
+        tour_id=None,
+        date_from=None,
+        date_to=None,
+    ):
+        bookings = []
+        if self.booking and self.tour and self.tour.guide_id == guide_id:
+            bookings = [self.booking]
+        if status is not None:
+            bookings = [item for item in bookings if item.status == status]
+        if tour_id is not None:
+            bookings = [item for item in bookings if item.tour_id == tour_id]
+        if date_from is not None and self.slot is not None:
+            bookings = [item for item in bookings if self.slot.starts_at >= date_from]
+        if date_to is not None and self.slot is not None:
+            bookings = [item for item in bookings if self.slot.starts_at <= date_to]
+        return bookings[skip : skip + limit], len(bookings)
+
+    async def list_admin_bookings(
+        self,
+        skip,
+        limit,
+        user_id=None,
+        tour_id=None,
+        status=None,
+        date_from=None,
+        date_to=None,
+    ):
+        bookings = [self.booking] if self.booking else []
+        if user_id is not None:
+            bookings = [item for item in bookings if item.user_id == user_id]
+        if tour_id is not None:
+            bookings = [item for item in bookings if item.tour_id == tour_id]
+        if status is not None:
+            bookings = [item for item in bookings if item.status == status]
+        if date_from is not None and self.slot is not None:
+            bookings = [item for item in bookings if self.slot.starts_at >= date_from]
+        if date_to is not None and self.slot is not None:
+            bookings = [item for item in bookings if self.slot.starts_at <= date_to]
         return bookings[skip : skip + limit], len(bookings)
 
 
@@ -169,7 +216,7 @@ async def test_create_booking_raises_for_not_enough_capacity(sample_tour, sample
 @pytest.mark.asyncio
 async def test_create_booking_raises_if_atomic_reservation_fails(sample_tour, sample_slot, sample_user):
     class FailingReservationRepository(FakeBookingRepository):
-        async def add_booking_with_slot_update(self, *, booking, slot):
+        async def add_booking_with_slot_update(self, booking, slot):
             return None
 
     repository = FailingReservationRepository(tour=sample_tour, slot=sample_slot)
@@ -211,6 +258,31 @@ async def test_get_bookings_returns_paginated_items(sample_tour, sample_slot, sa
         page=1,
         limit=20,
     )
+    assert response.meta.total == 1
+    assert response.data[0].id == sample_booking.id
+
+
+@pytest.mark.asyncio
+async def test_get_guide_bookings_returns_paginated_items(sample_tour, sample_slot, sample_booking, sample_user):
+    sample_tour.guide_id = str(sample_user.id)
+    sample_booking.tour_id = sample_tour.id
+    sample_booking.slot_id = sample_slot.id
+    repository = FakeBookingRepository(tour=sample_tour, slot=sample_slot, booking=sample_booking)
+    response = await BookingService(repository).get_guide_bookings(
+        guide_id=sample_user.id,
+        page=1,
+        limit=20,
+    )
+    assert response.meta.total == 1
+    assert response.data[0].id == sample_booking.id
+
+
+@pytest.mark.asyncio
+async def test_get_admin_bookings_returns_paginated_items(sample_tour, sample_slot, sample_booking):
+    sample_booking.tour_id = sample_tour.id
+    sample_booking.slot_id = sample_slot.id
+    repository = FakeBookingRepository(tour=sample_tour, slot=sample_slot, booking=sample_booking)
+    response = await BookingService(repository).get_admin_bookings(page=1, limit=20)
     assert response.meta.total == 1
     assert response.data[0].id == sample_booking.id
 
@@ -281,6 +353,35 @@ async def test_confirm_mock_payment_success(sample_booking):
 
 
 @pytest.mark.asyncio
+async def test_confirm_booking_by_guide_success(sample_tour, sample_slot, sample_booking, sample_user):
+    sample_tour.guide_id = str(sample_user.id)
+    sample_booking.tour_id = sample_tour.id
+    sample_booking.slot_id = sample_slot.id
+    repository = FakeBookingRepository(tour=sample_tour, slot=sample_slot, booking=sample_booking)
+    response = await BookingService(repository).confirm_booking_by_guide(
+        booking_id=sample_booking.id,
+        guide_id=sample_user.id,
+    )
+    assert response.data.status == BookingStatus.CONFIRMED
+
+
+@pytest.mark.asyncio
+async def test_confirm_booking_by_guide_forbidden_for_foreign_guide(
+    sample_tour, sample_slot, sample_booking,
+):
+    sample_tour.guide_id = str(uuid.uuid4())
+    sample_booking.tour_id = sample_tour.id
+    sample_booking.slot_id = sample_slot.id
+    repository = FakeBookingRepository(tour=sample_tour, slot=sample_slot, booking=sample_booking)
+    with pytest.raises(HTTPException) as exc:
+        await BookingService(repository).confirm_booking_by_guide(
+            booking_id=sample_booking.id,
+            guide_id=uuid.uuid4(),
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_cancel_booking_returns_existing_cancelled(sample_booking):
     sample_booking.status = BookingStatus.CANCELLED
     sample_booking.refund_status = RefundStatus.NOT_REQUIRED
@@ -345,6 +446,25 @@ async def test_cancel_booking_sets_not_required_refund_for_unpaid(sample_booking
         cancel_in=make_cancel_request(reason="n/a"),
     )
     assert response.data.refund_status == RefundStatus.NOT_REQUIRED
+
+
+@pytest.mark.asyncio
+async def test_cancel_booking_by_guide_sets_pending_refund_for_confirmed(
+    sample_tour, sample_slot, sample_booking, sample_user,
+):
+    sample_tour.guide_id = str(sample_user.id)
+    sample_booking.tour_id = sample_tour.id
+    sample_booking.slot_id = sample_slot.id
+    sample_booking.status = BookingStatus.CONFIRMED
+    sample_slot.status = SlotStatus.SOLD_OUT
+    sample_slot.available_capacity = 0
+    repository = FakeBookingRepository(tour=sample_tour, slot=sample_slot, booking=sample_booking)
+    response = await BookingService(repository).cancel_booking_by_guide(
+        booking_id=sample_booking.id,
+        guide_id=sample_user.id,
+    )
+    assert response.data.status == BookingStatus.CANCELLED
+    assert response.data.refund_status == RefundStatus.PENDING
 
 
 @pytest.mark.asyncio

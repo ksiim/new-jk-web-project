@@ -7,6 +7,7 @@ from src.app.db.models.review import (
     Review,
     ReviewCreatedPublic,
     ReviewEntityType,
+    ReviewModerationDecision,
     ReviewPublic,
     ReviewResponse,
     ReviewsPublic,
@@ -40,6 +41,25 @@ def review_to_created(review: Review) -> ReviewCreatedPublic:
 
 
 class ReviewService(BaseService[ReviewRepository]):
+    async def get_my_reviews(
+        self,
+        *,
+        user_id,
+        page: int,
+        limit: int,
+        entity_type: ReviewEntityType | None = None,
+    ) -> ReviewsPublic:
+        reviews, total = await self.repository.list_user_reviews(
+            user_id=user_id,
+            skip=(page - 1) * limit,
+            limit=limit,
+            entity_type=entity_type,
+        )
+        return ReviewsPublic(
+            data=[review_to_public(review) for review in reviews],
+            meta=PaginationMeta.create(page=page, limit=limit, total=total),
+        )
+
     async def get_tour_reviews(
         self,
         *,
@@ -135,3 +155,70 @@ class ReviewService(BaseService[ReviewRepository]):
             entity_id=poe_id,
         )
         return DetailResponse(data=review_public)
+
+    async def get_admin_reviews(
+        self,
+        page: int,
+        limit: int,
+        suspicious: bool | None = None,
+        hidden: bool | None = None,
+    ) -> ReviewsPublic:
+        reviews, total = await self.repository.list_admin_reviews(
+            skip=(page - 1) * limit,
+            limit=limit,
+            suspicious=suspicious,
+            hidden=hidden,
+        )
+        return ReviewsPublic(
+            data=[review_to_public(review) for review in reviews],
+            meta=PaginationMeta.create(page=page, limit=limit, total=total),
+        )
+
+    async def get_guide_reviews(
+        self,
+        *,
+        guide_id: str,
+        page: int,
+        limit: int,
+        rating: int | None = None,
+    ) -> ReviewsPublic:
+        reviews, total = await self.repository.list_guide_reviews(
+            guide_id=guide_id,
+            skip=(page - 1) * limit,
+            limit=limit,
+            rating=rating,
+        )
+        return ReviewsPublic(
+            data=[review_to_public(review) for review in reviews],
+            meta=PaginationMeta.create(page=page, limit=limit, total=total),
+        )
+
+    async def hide_review(
+        self,
+        review_id: str,
+        decision_in: ReviewModerationDecision,
+    ) -> ReviewResponse:
+        review = await self.repository.get_by_id(review_id)
+        if not review:
+            raise HTTPException(status_code=404, detail="Review not found")
+        review.hidden = True
+        if decision_in.suspicious is not None:
+            review.suspicious = decision_in.suspicious
+        if decision_in.reported_count is not None:
+            review.reported_count = decision_in.reported_count
+        review = await self.repository.add(review)
+        return DetailResponse(data=review_to_created(review))
+
+    async def delete_review(self, review_id: str) -> DetailResponse[dict[str, str]]:
+        review = await self.repository.get_by_id(review_id)
+        if not review:
+            raise HTTPException(status_code=404, detail="Review not found")
+        await self.repository.delete(review)
+        return DetailResponse(data={"id": review_id, "status": "deleted"})
+
+    async def delete_my_review(self, review_id: str, user_id) -> DetailResponse[dict[str, str]]:
+        review = await self.repository.get_user_review(review_id, user_id)
+        if not review:
+            raise HTTPException(status_code=404, detail="Review not found")
+        await self.repository.delete(review)
+        return DetailResponse(data={"id": review_id, "status": "deleted"})

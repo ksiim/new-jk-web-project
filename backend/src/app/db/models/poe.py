@@ -52,15 +52,43 @@ class PoeBase(SQLModel):
     opening_hours: list[dict[str, str]] = Field(default_factory=list, sa_column=Column(JSON))
 
 
+class PoeStatus(str):
+    ACTIVE = "active"
+    HIDDEN = "hidden"
+    DELETED = "deleted"
+
+
 class Poe(PoeBase, table=True):
     __tablename__ = "poes"  # type: ignore
 
     id: str = Field(default_factory=build_poe_id, primary_key=True, max_length=32)
+    status: str = Field(default=PoeStatus.ACTIVE, index=True, max_length=32)
+    moderation_reason: str | None = Field(default=None, max_length=1024)
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
 
 
 class PoeCreate(PoeBase):
     opening_hours: list[OpeningHoursItem] = Field(default_factory=list)
+
+
+class PoeUpdate(SQLModel):
+    title: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    category: str | None = Field(default=None, max_length=64)
+    tags: list[str] | None = None
+    lat: float | None = None
+    lng: float | None = None
+    address: str | None = Field(default=None, max_length=512)
+    wheelchair_accessible: bool | None = None
+    has_ramp: bool | None = None
+    has_stairs: bool | None = None
+    duration_minutes: int | None = Field(default=None, ge=1)
+    images: list[str] | None = None
+    opening_hours: list[OpeningHoursItem] | None = None
+
+
+class PoeModerationDecision(SQLModel):
+    reason: str | None = Field(default=None, max_length=1024)
 
 
 class PoePublic(SQLModel):
@@ -91,4 +119,45 @@ class PoeMapItem(SQLModel):
     is_accessible: bool
 
 
+class PoeTaxonomyType(str):
+    CATEGORY = "category"
+    TAG = "tag"
+
+
+class PoeTaxonomyStatus(str):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+class PoeTaxonomy(SQLModel, table=True):
+    __tablename__ = "poe_taxonomies"  # type: ignore
+
+    id: str = Field(
+        default_factory=lambda: f"tax_{uuid.uuid4().hex[:12]}",
+        primary_key=True,
+        max_length=32,
+    )
+    type: str = Field(index=True, max_length=32)
+    value: str = Field(index=True, max_length=128)
+    status: str = Field(default=PoeTaxonomyStatus.ACTIVE, index=True, max_length=32)
+    created_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
+
+
+class PoeTaxonomyCreate(SQLModel):
+    type: str
+    value: str
+
+
+class PoeTaxonomyUpdate(SQLModel):
+    value: str | None = None
+
+
+class PoeTaxonomyPublic(SQLModel):
+    id: str
+    type: str
+    value: str
+    status: str
+
+
 PoesPublic = ListResponse[PoePublic]
+PoeTaxonomiesPublic = ListResponse[PoeTaxonomyPublic]

@@ -1,6 +1,7 @@
 import datetime
 import uuid
 
+from sqlalchemy import Column, ForeignKey, String
 from sqlmodel import Field, SQLModel
 
 from src.app.const import Variants
@@ -28,17 +29,25 @@ class Review(SQLModel, table=True):
     id: str = Field(default_factory=build_review_id, primary_key=True, max_length=32)
     entity_type: ReviewEntityType = Field(index=True)
     entity_id: str = Field(index=True, max_length=32)
-    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    user_id: uuid.UUID = Field(
+        sa_column=Column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False),
+    )
     user_name: str = Field(max_length=255)
     booking_id: str | None = Field(
         default=None,
-        foreign_key="bookings.id",
-        index=True,
-        max_length=32,
+        sa_column=Column(
+            String(32),
+            ForeignKey("bookings.id", ondelete="SET NULL"),
+            index=True,
+            nullable=True,
+        ),
     )
     rating: int = Field(ge=1, le=5)
     text: str = Field(max_length=4000)
     accessibility_rating: int | None = Field(default=None, ge=1, le=5)
+    hidden: bool = Field(default=False, index=True)
+    suspicious: bool = Field(default=False, index=True)
+    reported_count: int = Field(default=0, ge=0)
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
 
 
@@ -61,6 +70,11 @@ class ReviewCreatedPublic(SQLModel):
     text: str
     accessibility_rating: int | None = None
     created_at: datetime.datetime | None = None
+
+
+class ReviewModerationDecision(SQLModel):
+    suspicious: bool | None = None
+    reported_count: int | None = Field(default=None, ge=0)
 
 
 class TourReviewCreate(ReviewBase):

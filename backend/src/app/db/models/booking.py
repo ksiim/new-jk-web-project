@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Column, ForeignKey, String, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 from src.app.const import Variants
@@ -43,9 +43,25 @@ class Booking(SQLModel, table=True):
     )
 
     id: str = Field(default_factory=build_booking_id, primary_key=True, max_length=32)
-    tour_id: str = Field(foreign_key="tours.id", index=True, max_length=32)
-    slot_id: str = Field(foreign_key="tour_slots.id", index=True, max_length=32)
-    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    tour_id: str = Field(
+        sa_column=Column(
+            String(32),
+            ForeignKey("tours.id", ondelete="CASCADE"),
+            index=True,
+            nullable=False,
+        ),
+    )
+    slot_id: str = Field(
+        sa_column=Column(
+            String(32),
+            ForeignKey("tour_slots.id", ondelete="CASCADE"),
+            index=True,
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False),
+    )
     participants_count: int = Field(ge=1)
     status: BookingStatus = Field(default=BookingStatus.PENDING_PAYMENT, index=True)
     price_total_amount: int = Field(ge=0)

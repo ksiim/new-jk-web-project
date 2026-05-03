@@ -12,8 +12,17 @@ from src.app.db.models.poe import (
     PoeCreate,
     PoeDetail,
     PoeMapItem,
+    PoeModerationDecision,
     PoePublic,
     PoesPublic,
+    PoeStatus,
+    PoeTaxonomiesPublic,
+    PoeTaxonomy,
+    PoeTaxonomyCreate,
+    PoeTaxonomyPublic,
+    PoeTaxonomyStatus,
+    PoeTaxonomyUpdate,
+    PoeUpdate,
 )
 from src.app.db.schemas import DetailResponse, PaginationMeta
 from src.app.repositories.poe import PoeRepository
@@ -178,4 +187,119 @@ class PoeService(BaseService[PoeRepository]):
                 )
                 for poe in filtered
             ],
+        )
+
+    async def get_admin_poes(self, page: int, limit: int, status: str | None = None) -> PoesPublic:
+        poes, total = await self.repository.list_admin_poes(
+            skip=(page - 1) * limit,
+            limit=limit,
+            status=status,
+        )
+        return PoesPublic(
+            data=[poe_to_public(poe) for poe in poes],
+            meta=PaginationMeta.create(page=page, limit=limit, total=total),
+        )
+
+    async def update_poe(self, poe_id: str, poe_in: PoeUpdate) -> DetailResponse[PoeDetail]:
+        poe = await self.repository.get_by_id(poe_id)
+        if not poe:
+            raise HTTPException(status_code=404, detail="POE not found")
+        payload = poe_in.model_dump(exclude_unset=True, mode="json", by_alias=True)
+        for key, value in payload.items():
+            setattr(poe, key, value)
+        poe = await self.repository.add(poe)
+        return DetailResponse(data=poe_to_detail(poe))
+
+    async def hide_poe(
+        self,
+        poe_id: str,
+        decision_in: PoeModerationDecision,
+    ) -> DetailResponse[PoeDetail]:
+        return await self._moderate_poe(poe_id, PoeStatus.HIDDEN, decision_in.reason)
+
+    async def delete_poe(
+        self,
+        poe_id: str,
+        decision_in: PoeModerationDecision,
+    ) -> DetailResponse[PoeDetail]:
+        return await self._moderate_poe(poe_id, PoeStatus.DELETED, decision_in.reason)
+
+    async def get_taxonomies(
+        self,
+        page: int,
+        limit: int,
+        type_value: str | None = None,
+        status: str | None = None,
+    ) -> PoeTaxonomiesPublic:
+        items, total = await self.repository.list_taxonomies(
+            skip=(page - 1) * limit,
+            limit=limit,
+            type_value=type_value,
+            status=status,
+        )
+        return PoeTaxonomiesPublic(
+            data=[self._taxonomy_to_public(item) for item in items],
+            meta=PaginationMeta.create(page=page, limit=limit, total=total),
+        )
+
+    async def create_taxonomy(
+        self,
+        taxonomy_in: PoeTaxonomyCreate,
+    ) -> DetailResponse[PoeTaxonomyPublic]:
+        existing = await self.repository.get_taxonomy_by_type_and_value(
+            taxonomy_in.type,
+            taxonomy_in.value,
+        )
+        if existing:
+            raise HTTPException(status_code=409, detail="Taxonomy value already exists")
+        taxonomy = await self.repository.add(
+            PoeTaxonomy(
+                type=taxonomy_in.type,
+                value=taxonomy_in.value,
+                status=PoeTaxonomyStatus.ACTIVE,
+            ),
+        )
+        return DetailResponse(data=self._taxonomy_to_public(taxonomy))
+
+    async def update_taxonomy(
+        self,
+        taxonomy_id: str,
+        taxonomy_in: PoeTaxonomyUpdate,
+    ) -> DetailResponse[PoeTaxonomyPublic]:
+        taxonomy = await self.repository.get_taxonomy(taxonomy_id)
+        if not taxonomy:
+            raise HTTPException(status_code=404, detail="Taxonomy not found")
+        for key, value in taxonomy_in.model_dump(exclude_unset=True).items():
+            setattr(taxonomy, key, value)
+        taxonomy = await self.repository.add(taxonomy)
+        return DetailResponse(data=self._taxonomy_to_public(taxonomy))
+
+    async def archive_taxonomy(self, taxonomy_id: str) -> DetailResponse[PoeTaxonomyPublic]:
+        taxonomy = await self.repository.get_taxonomy(taxonomy_id)
+        if not taxonomy:
+            raise HTTPException(status_code=404, detail="Taxonomy not found")
+        taxonomy.status = PoeTaxonomyStatus.ARCHIVED
+        taxonomy = await self.repository.add(taxonomy)
+        return DetailResponse(data=self._taxonomy_to_public(taxonomy))
+
+    async def _moderate_poe(
+        self,
+        poe_id: str,
+        status: str,
+        reason: str | None,
+    ) -> DetailResponse[PoeDetail]:
+        poe = await self.repository.get_by_id(poe_id)
+        if not poe:
+            raise HTTPException(status_code=404, detail="POE not found")
+        poe.status = status
+        poe.moderation_reason = reason
+        poe = await self.repository.add(poe)
+        return DetailResponse(data=poe_to_detail(poe))
+
+    def _taxonomy_to_public(self, taxonomy: PoeTaxonomy) -> PoeTaxonomyPublic:
+        return PoeTaxonomyPublic(
+            id=taxonomy.id,
+            type=taxonomy.type,
+            value=taxonomy.value,
+            status=taxonomy.status,
         )

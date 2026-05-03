@@ -12,6 +12,7 @@ from src.app.db.models.user import (
     UsersPublic,
     UserUpdate,
 )
+from src.app.db.models.user_preference import UserPreferencesResponse, UserPreferencesUpdate
 from src.app.db.schemas import Message
 
 router = APIRouter()
@@ -54,6 +55,26 @@ async def update_user_me(
         user_in=user_in,
     )
     return user
+
+
+@router.get("/me/preferences", response_model=UserPreferencesResponse)
+async def read_user_preferences(
+    user_service: UserServiceDep,
+    current_user: CurrentUser,
+) -> UserPreferencesResponse:
+    return await user_service.get_preferences(user_id=current_user.id)
+
+
+@router.put("/me/preferences", response_model=UserPreferencesResponse)
+async def update_user_preferences(
+    user_service: UserServiceDep,
+    preferences_in: UserPreferencesUpdate,
+    current_user: CurrentUser,
+) -> UserPreferencesResponse:
+    return await user_service.update_preferences(
+        user_id=current_user.id,
+        preferences_in=preferences_in,
+    )
 
 
 @router.delete("/me", response_model=Message)

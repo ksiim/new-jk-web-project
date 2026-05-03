@@ -6,7 +6,7 @@ from sqlmodel import Field, SQLModel
 
 from src.app.const import Variants
 from src.app.db.models.poe import Location
-from src.app.db.schemas import DetailResponse
+from src.app.db.schemas import DetailResponse, ListResponse
 
 
 def build_route_id() -> str:
@@ -36,6 +36,10 @@ class Route(SQLModel, table=True):
     __tablename__ = "routes"  # type: ignore
 
     id: str = Field(default_factory=build_route_id, primary_key=True, max_length=32)
+    user_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=Column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True),
+    )
     title: str = Field(max_length=255)
     description: str
     city_id: str = Field(index=True, max_length=64)
@@ -48,6 +52,9 @@ class Route(SQLModel, table=True):
     start_lng: float | None = None
     start_address: str | None = Field(default=None, max_length=512)
     accessibility_score: int = Field(default=0, ge=0, le=100)
+    started_at: datetime.datetime | None = None
+    completed_at: datetime.datetime | None = None
+    progress_order: int = Field(default=0, ge=0)
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
 
 
@@ -92,6 +99,72 @@ class RoutePointPublic(SQLModel):
     planned_stop_minutes: int
 
 
+class RouteListItemPublic(SQLModel):
+    id: str
+    title: str
+    status: RouteStatus
+    source: RouteSource
+    duration_minutes: int
+    distance_meters: int
+    created_at: datetime.datetime
+
+
+class RoutePoeShort(SQLModel):
+    id: str
+    title: str
+    category: str
+
+
+class RoutePointDetailPublic(SQLModel):
+    order: int
+    poe: RoutePoeShort
+    planned_stop_minutes: int
+
+
+class RouteDetailPublic(SQLModel):
+    id: str
+    title: str
+    description: str
+    city_id: str
+    status: RouteStatus
+    source: RouteSource
+    duration_minutes: int
+    distance_meters: int
+    pace: Pace
+    start_point: Location
+    points: list[RoutePointDetailPublic]
+    accessibility_score: int
+    created_at: datetime.datetime
+
+
+class RouteSavedPublic(SQLModel):
+    id: str
+    status: RouteStatus
+
+
+class RouteJourneyPublic(SQLModel):
+    id: str
+    status: RouteStatus
+    progress_order: int
+    started_at: datetime.datetime | None = None
+    completed_at: datetime.datetime | None = None
+
+
+class RouteProgressUpdate(SQLModel):
+    order: int = Field(ge=1)
+
+
+class RoutePointEdit(SQLModel):
+    poe_id: str
+    planned_stop_minutes: int = Field(ge=1)
+
+
+class RouteManualUpdate(SQLModel):
+    title: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    points: list[RoutePointEdit] | None = None
+
+
 class RouteGeneratedPublic(SQLModel):
     id: str
     title: str
@@ -107,3 +180,7 @@ class RouteGeneratedPublic(SQLModel):
 
 
 RouteGenerateResponse = DetailResponse[RouteGeneratedPublic]
+RoutesPublic = ListResponse[RouteListItemPublic]
+RouteResponse = DetailResponse[RouteDetailPublic]
+RouteSaveResponse = DetailResponse[RouteSavedPublic]
+RouteJourneyResponse = DetailResponse[RouteJourneyPublic]

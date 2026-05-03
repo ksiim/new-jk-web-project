@@ -1,3 +1,4 @@
+import datetime
 import uuid
 from collections.abc import Sequence
 
@@ -54,6 +55,53 @@ class BookingRepository(BaseRepository[Booking]):
         total = (await self.session.execute(total_statement)).scalar_one()
         return items, total
 
+    async def list_guide_bookings(
+        self,
+        *,
+        guide_id: str,
+        skip: int,
+        limit: int,
+        status: BookingStatus | None = None,
+        tour_id: str | None = None,
+        date_from: datetime.datetime | None = None,
+        date_to: datetime.datetime | None = None,
+    ) -> tuple[Sequence[Booking], int]:
+        statement = (
+            select(Booking)
+            .join(Tour, Tour.id == Booking.tour_id)
+            .join(TourSlot, TourSlot.id == Booking.slot_id)
+            .where(Tour.guide_id == guide_id)
+        )
+        if status:
+            statement = statement.where(Booking.status == status)
+        if tour_id:
+            statement = statement.where(Booking.tour_id == tour_id)
+        if date_from is not None:
+            statement = statement.where(TourSlot.starts_at >= date_from)
+        if date_to is not None:
+            statement = statement.where(TourSlot.starts_at <= date_to)
+        statement = statement.order_by(Booking.created_at.desc())
+        items = (await self.session.execute(statement.offset(skip).limit(limit))).scalars().all()
+
+        total_statement = (
+            select(func.count())
+            .select_from(Booking)
+            .join(Tour, Tour.id == Booking.tour_id)
+            .join(TourSlot, TourSlot.id == Booking.slot_id)
+            .where(Tour.guide_id == guide_id)
+        )
+        if status:
+            total_statement = total_statement.where(Booking.status == status)
+        if tour_id:
+            total_statement = total_statement.where(Booking.tour_id == tour_id)
+        if date_from is not None:
+            total_statement = total_statement.where(TourSlot.starts_at >= date_from)
+        if date_to is not None:
+            total_statement = total_statement.where(TourSlot.starts_at <= date_to)
+
+        total = (await self.session.execute(total_statement)).scalar_one()
+        return items, total
+
     async def add_booking_with_slot_update(
         self,
         *,
@@ -82,6 +130,7 @@ class BookingRepository(BaseRepository[Booking]):
             )
         self.session.add(booking)
         await self.session.commit()
+        await self.session.refresh(booking)
         return booking
 
     async def save_booking_and_slot(
@@ -94,4 +143,41 @@ class BookingRepository(BaseRepository[Booking]):
             self.session.add(slot)
         self.session.add(booking)
         await self.session.commit()
+        await self.session.refresh(booking)
         return booking
+
+    async def list_admin_bookings(
+        self,
+        skip: int,
+        limit: int,
+        user_id: uuid.UUID | None = None,
+        tour_id: str | None = None,
+        status: BookingStatus | None = None,
+        date_from: datetime.datetime | None = None,
+        date_to: datetime.datetime | None = None,
+    ) -> tuple[Sequence[Booking], int]:
+        statement = select(Booking).join(TourSlot, TourSlot.id == Booking.slot_id)
+        total_statement = (
+            select(func.count())
+            .select_from(Booking)
+            .join(TourSlot, TourSlot.id == Booking.slot_id)
+        )
+        if user_id is not None:
+            statement = statement.where(Booking.user_id == user_id)
+            total_statement = total_statement.where(Booking.user_id == user_id)
+        if tour_id is not None:
+            statement = statement.where(Booking.tour_id == tour_id)
+            total_statement = total_statement.where(Booking.tour_id == tour_id)
+        if status is not None:
+            statement = statement.where(Booking.status == status)
+            total_statement = total_statement.where(Booking.status == status)
+        if date_from is not None:
+            statement = statement.where(TourSlot.starts_at >= date_from)
+            total_statement = total_statement.where(TourSlot.starts_at >= date_from)
+        if date_to is not None:
+            statement = statement.where(TourSlot.starts_at <= date_to)
+            total_statement = total_statement.where(TourSlot.starts_at <= date_to)
+        statement = statement.order_by(Booking.created_at.desc()).offset(skip).limit(limit)
+        items = (await self.session.execute(statement)).scalars().all()
+        total = int((await self.session.execute(total_statement)).scalar_one())
+        return items, total
